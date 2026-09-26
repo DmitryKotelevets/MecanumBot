@@ -3,7 +3,7 @@
 Проект: мобильная платформа на меканум-колёсах. Полный дизайн — DESIGN.md, протокол — protocol/PROTOCOL.md (источник истины для обеих сторон; заменяет DESIGN.md §3).
 
 ## Компоненты
-- firmware/ — PlatformIO, ESP32-C6, Arduino core 3.x. Тесты: `cd firmware && pio test -e native`. Сборка: `pio run -e esp32c6`.
+- firmware/ — PlatformIO, ESP32-C6, Arduino core 3.x. Тесты: `cd firmware && pio test -e native`. Сборка: `pio run -e esp32c6`. Консоль с Mac: `python3 firmware/tools/usb_console.py` (нужен pyserial).
 - android-app/ — Kotlin/Compose. Тесты core: `./gradlew :core:test`.
 - pilot-web/ — статика, копируется в android-app/app/src/main/assets/pilot/.
 - protocol/ — PROTOCOL.md, vectors.json и генератор gen_vectors.py (эталонная реализация на Python).
@@ -16,7 +16,7 @@
 - Тесты firmware и Android читают protocol/vectors.json напрямую, копий не держать.
 - Любая команда движения подчиняется failsafe (`failsafe_ms`, по умолчанию 300 мс). Не добавлять пути, которые могут крутить мотор без «пульса».
 - В Android не трогать DTR/RTS на USB-порту.
-- Модули lib/protocol, lib/kinematics, lib/failsafe и android core — без зависимостей от Arduino/Android, они должны собираться в native-тестах.
+- Модули lib/protocol, lib/kinematics, lib/failsafe, lib/motion, lib/controller и android core — без зависимостей от Arduino/Android, они должны собираться в native-тестах. Логику держать в них; lib/link, motors, storage, telemetry — тонкие обёртки над железом.
 - Пины и константы только из include/config.h.
 - Отправка по USB из прошивки только при Serial.availableForWrite() достаточном для кадра; никогда не блокировать loop().
 - Приложение: любая работа с железом идёт через интерфейс Link; FakeLink должен поддерживать все типы кадров, чтобы UI разрабатывался без ESP32.

@@ -96,13 +96,13 @@ DRIVE `flags`:
 | bit1..2 | источник: 0 test, 1 local pad, 2 remote, 3 зарезервировано |
 | bit3..7 | зарезервировано |
 
-`m1…m4` в MOTOR_RAW — **физические каналы** M1–M4 (DESIGN §2.3), в обход кинематики, `map`, `invert` и `trim`.
+`m1…m4` в MOTOR_RAW — **физические каналы** M1–M4 (DESIGN §2.3), в обход кинематики, `map`, `invert`, `trim` и `min_duty`. Ограничение `max_duty` действует: 127 при `max_duty=80` даёт 80 % PWM.
 
 ### 4.2 ESP32 → телефон
 
 | type | Имя | len | payload | Когда |
 |---|---|---|---|---|
-| 0x80 | HELLO_ACK | 6 | `proto_ver u8, fw_major u8, fw_minor u8, reset_reason u8, reset_count u16` | на HELLO и сам при старте прошивки |
+| 0x80 | HELLO_ACK | 6 | `proto_ver u8, fw_major u8, fw_minor u8, reset_reason u8, reset_count u16` | на HELLO и сам при подключении хоста (§5.6) |
 | 0x81 | TELEMETRY | 20 | см. §4.3 | 10 Гц, всегда |
 | 0x82 | ACK | 3 | `req_type u8, req_seq u8, status u8` | на CONFIG, STOP, OTA_\*, WIFI_OTA_\* |
 | 0x83 | LOG | 1…200 | `level u8, text [0…199]` | по событию |
@@ -186,7 +186,7 @@ ESP32 **не требует** HELLO перед командами (чтобы `t
 
 ### 5.6 Отправка
 - Кадр пишется в USB только если `Serial.availableForWrite() >= 5 + len`; иначе он пропускается целиком, `loop()` не блокируется. Приоритет при нехватке места: ACK/HELLO_ACK/PONG > TELEMETRY > LOG.
-- При старте прошивка сама отправляет HELLO_ACK (`seq` = 0): появление HELLO_ACK без запроса означает, что ESP32 перезагрузился.
+- Прошивка сама отправляет HELLO_ACK, когда хост подключается к порту (после старта и после каждого переподключения USB): до этого кадр доставить нельзя. HELLO_ACK без запроса означает «ESP32 перезагрузился или порт переоткрыт»; перезагрузку телефон отличает по росту `reset_count` (или сбросу `uptime_s` в TELEMETRY).
 
 ## 6. Поведение телефона
 
