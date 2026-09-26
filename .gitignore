@@ -1,0 +1,22 @@
+# PlatformIO
+.pio/
+.vscode/.browse*
+.vscode/ipch
+
+# Android / Gradle
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+captures/
+*.apk
+*.aab
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS
+.DS_Store
