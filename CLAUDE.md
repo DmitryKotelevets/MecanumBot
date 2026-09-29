@@ -7,6 +7,7 @@
 - android-app/ — Kotlin/Compose. Тесты core: `./gradlew :core:test`.
 - pilot-web/ — статика, копируется в android-app/app/src/main/assets/pilot/.
 - protocol/ — PROTOCOL.md, vectors.json и генератор gen_vectors.py (эталонная реализация на Python).
+- schematic/ — принципиальная схема: schematic.html генерируется `python3 schematic/gen_schematic.py`, вручную не править; при изменении hardware/wiring.md обновлять генератор.
 - hardware/wiring.md — питание и распиновка; docs/measurements.md — результаты измерений этапа 0a.
 
 ## Правила

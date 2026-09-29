@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Схема MecanumBot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600&display=swap">
+<style>
+/* Layout: one wide schematic sheet with a source switch above it; legend and parts list below. */
+:root {
+  --bg: #f5f6f3; --sheet: #fcfcfa; --ink: #1d2430; --muted: #5f6877; --line: #c9cfc8;
+  --v5: #c2362b; --ext: #6a3fb5; --vm: #b86a00; --sig: #1d2430; --gnd: #5f6877;
+  --font-body: "IBM Plex Sans", system-ui, sans-serif;
+  --font-disp: "IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #14171c; --sheet: #1a1e24; --ink: #e3e6ea; --muted: #98a0ab; --line: #343a43;
+  --v5: #ff7a6b; --ext: #b69cff; --vm: #f0a640; --sig: #e3e6ea; --gnd: #98a0ab; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #14171c; --sheet: #1a1e24; --ink: #e3e6ea; --muted: #98a0ab; --line: #343a43;
+  --v5: #ff7a6b; --ext: #b69cff; --vm: #f0a640; --sig: #e3e6ea; --gnd: #98a0ab; color-scheme: dark; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5; }
+main { max-width: 1100px; margin: 0 auto; padding: 28px 16px 48px; display: grid; gap: 22px; }
+h1 { font-family: var(--font-disp); font-weight: 600; font-size: 28px; margin: 0; text-wrap: balance; }
+h2 { font-family: var(--font-disp); font-weight: 600; font-size: 18px; margin: 0 0 8px; }
+.lead { margin: 4px 0 0; color: var(--muted); max-width: 70ch; }
+.bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.bar span { font-size: 13px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { font: 500 14px var(--font-body); padding: 7px 14px; border: 0; background: var(--sheet); color: var(--ink); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--sheet); }
+.seg button:focus-visible { outline: 2px solid var(--vm); outline-offset: -2px; }
+figure { margin: 0; background: var(--sheet); border: 1px solid var(--line); border-radius: 6px; }
+.scroll { overflow-x: auto; padding: 12px; }
+svg { display: block; width: 100%; min-width: 820px; height: auto; }
+figcaption { padding: 10px 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13.5px; }
+.w { fill: none; stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; transition: opacity .2s; }
+.sig { stroke: var(--sig); } .v5 { stroke: var(--v5); stroke-width: 2.2; } .ext { stroke: var(--ext); stroke-width: 2.2; }
+.vm { stroke: var(--vm); stroke-width: 2.2; } .gnd { stroke: var(--gnd); } .mot { stroke: var(--sig); }
+.vin { stroke: var(--vin); stroke-width: 2.2; }
+.usb { stroke: var(--v5); stroke-width: 5; stroke-opacity: .35; }
+.sw { stroke: var(--vm); stroke-width: 2.2; }
+.dot { stroke: none; } .dot.sig, .dot.mot { fill: var(--sig); } .dot.vm { fill: var(--vm); } .dot.vin { fill: var(--vin); }
+.g line { stroke: var(--gnd); stroke-width: 1.6; stroke-linecap: round; }
+.part { fill: var(--sheet); stroke: var(--sig); stroke-width: 1.5; }
+.plate { stroke: var(--sig); stroke-width: 2.2; stroke-linecap: round; }
+.blk { fill: var(--sheet); stroke: var(--sig); stroke-width: 1.5; }
+.port { fill: var(--sheet); stroke: var(--v5); stroke-width: 1.5; }
+.jpin { fill: var(--sheet); stroke: var(--sig); stroke-width: 1.5; }
+.jcap { fill: var(--vin); fill-opacity: .14; stroke: var(--vin); stroke-width: 2; transition: transform .25s; }
+.flag { fill: var(--sheet); stroke-width: 1.4; } .flag.vm { stroke: var(--vm); } .flag.sig { stroke: var(--sig); }
+.rule { stroke: var(--line); stroke-width: 1; }
+text { fill: var(--ink); font-family: var(--font-body); font-size: 12px; }
+.btitle { font-family: var(--font-disp); font-weight: 600; font-size: 14px; }
+.ref { font-family: var(--font-mono); font-weight: 500; font-size: 12px; }
+.val { fill: var(--muted); font-size: 11px; }
+.pin { font-family: var(--font-mono); font-size: 11px; }
+.pol { font-family: var(--font-mono); font-size: 12px; }
+.mname { font-family: var(--font-disp); font-weight: 600; font-size: 14px; }
+.flagt { font-family: var(--font-mono); font-size: 11px; }
+.net5 { fill: var(--v5); font-family: var(--font-mono); font-size: 11.5px; }
+.netvm { fill: var(--vm); font-family: var(--font-mono); font-size: 11.5px; }
+.sect { fill: var(--muted); font-family: var(--font-disp); font-size: 12px; letter-spacing: .12em; font-weight: 600; }
+.note { fill: var(--muted); font-size: 12px; }
+/* source switch */
+figure[data-src="phone"] { --vin: var(--v5); }
+figure[data-src="ext"] { --vin: var(--ext); }
+figure[data-src="phone"] .ext { opacity: .28; }
+figure[data-src="ext"] .v5 { opacity: .28; }
+figure[data-src="ext"] #jcap { transform: translateY(30px); }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 22px; align-items: start; }
+.cols > section { min-width: 0; }
+.legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.legend li { display: flex; gap: 10px; align-items: baseline; }
+.sw-k { flex: 0 0 26px; height: 0; border-top: 3px solid; transform: translateY(-4px); }
+ul.rules { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.tbl { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; color: var(--muted); font-weight: 500; letter-spacing: .04em; text-transform: uppercase; }
+td:first-child { font-family: var(--font-mono); white-space: nowrap; }
+code { font-family: var(--font-mono); font-size: .92em; }
+@media (prefers-reduced-motion: reduce) { .w, .jcap { transition: none; } }
+</style>
+<main>
+  <header>
+    <h1>Схема MecanumBot</h1>
+    <p class="lead">Питание, ESP32-C6, два модуля DRV8833 и четыре мотора. Распиновка по <code>hardware/wiring.md</code> и <code>firmware/include/config.h</code>; до пайки сверить с конкретными платами.</p>
+  </header>
+  <div class="bar">
+    <span>Джемпер J1</span>
+    <div class="seg" role="group" aria-label="Положение джемпера J1">
+      <button id="src-phone" type="button" aria-pressed="true" data-src="phone">1-2 · от телефона</button>
+      <button id="src-ext" type="button" aria-pressed="false" data-src="ext">2-3 · внешний 5–12 В</button>
+    </div>
+  </div>
+  <figure id="sch" data-src="phone">
+    <div class="scroll">
+<svg viewBox="0 0 1040 960" role="img" aria-label="Принципиальная схема MecanumBot: питание моторов от телефона или внешнего источника через джемпер J1 и MP1584, ESP32-C6 управляет двумя DRV8833 и четырьмя моторами">
+<text class="sect" x="20" y="22" text-anchor="start">ПИТАНИЕ</text>
+<rect class="blk" x="20" y="40" width="92" height="84" rx="3"/>
+<text class="btitle" x="66.0" y="58" text-anchor="middle">Телефон</text>
+<text class="val" x="66.0" y="72" text-anchor="middle">Pixel 9a</text>
+<text class="val" x="66" y="102" text-anchor="middle">USB-C OTG</text>
+<text class="val" x="66" y="114" text-anchor="middle">5 В, ≤ ~1 А</text>
+<line class="w usb" x1="66" y1="124" x2="66" y2="400"/>
+<text class="val" x="140" y="240" text-anchor="start">← USB-C кабель к U1</text>
+<text class="val" x="140" y="252" text-anchor="start">VBUS · D−/D+ · GND</text>
+<polyline class="w v5" points="130,400 130,80 372,80"/>
+<text class="net5" x="138" y="74" text-anchor="start">5 В (VBUS)</text>
+<text class="pin" x="136" y="416" text-anchor="start">5V</text>
+<rect class="blk" x="170" y="122" width="54" height="66" rx="3"/>
+<text class="btitle" x="197.0" y="140" text-anchor="middle">X1</text>
+<text class="val" x="197" y="152" text-anchor="middle">XT30</text>
+<text class="val" x="197" y="164" text-anchor="middle">5–12 В</text>
+<text class="pin" x="218" y="144" text-anchor="end">+</text>
+<text class="pin" x="218" y="178" text-anchor="end">−</text>
+<polyline class="w ext" points="224,140 262,140"/>
+<polyline class="w gnd" points="224,174 244,174 244,196"/>
+<g class="g gnd"><line x1="244" y1="196" x2="244" y2="202"/><line x1="236" y1="202" x2="252" y2="202"/><line x1="239" y1="205" x2="249" y2="205"/><line x1="242" y1="208" x2="246" y2="208"/></g>
+<rect class="blk" x="262" y="124" width="64" height="32" rx="3"/>
+<text class="btitle" x="294" y="138" text-anchor="middle">Q1</text>
+<text class="val" x="294" y="150" text-anchor="middle">AO3401</text>
+<text class="pin" x="266" y="120" text-anchor="start">D</text>
+<text class="pin" x="322" y="120" text-anchor="end">S</text>
+<polyline class="w ext" points="326,140 372,140"/>
+<polyline class="w sig" points="294,156 294,166.0"/>
+<rect class="part" x="289.5" y="166.0" width="9" height="24"/>
+<polyline class="w sig" points="294,190.0 294,200"/>
+<text class="ref" x="304" y="176" text-anchor="start">R1</text>
+<text class="val" x="304" y="188" text-anchor="start">10 кОм</text>
+<g class="g gnd"><line x1="294" y1="200" x2="294" y2="206"/><line x1="286" y1="206" x2="302" y2="206"/><line x1="289" y1="209" x2="299" y2="209"/><line x1="292" y1="212" x2="296" y2="212"/></g>
+<text class="pin" x="287" y="172" text-anchor="end">G</text>
+<circle class="jpin" cx="380" cy="80" r="6"/>
+<text class="pin" x="392" y="84" text-anchor="start">1</text>
+<circle class="jpin" cx="380" cy="110" r="6"/>
+<text class="pin" x="392" y="114" text-anchor="start">2</text>
+<circle class="jpin" cx="380" cy="140" r="6"/>
+<text class="pin" x="392" y="144" text-anchor="start">3</text>
+<rect id="jcap" class="jcap" x="368" y="68" width="24" height="54" rx="7"/>
+<text class="ref" x="380" y="56" text-anchor="middle">J1</text>
+<polyline class="w vin" points="386,110 400,110 488,110"/>
+<circle class="dot vin" cx="420" cy="110" r="3"/>
+<polyline class="w vin" points="420,110 420,124"/>
+<line class="plate" x1="411" y1="124" x2="429" y2="124"/>
+<line class="plate" x1="411" y1="130" x2="429" y2="130"/>
+<text class="pol" x="407" y="122" text-anchor="middle">+</text>
+<polyline class="w gnd" points="420,130 420,140"/>
+<g class="g gnd"><line x1="420" y1="140" x2="420" y2="146"/><line x1="412" y1="146" x2="428" y2="146"/><line x1="415" y1="149" x2="425" y2="149"/><line x1="418" y1="152" x2="422" y2="152"/></g>
+<text class="ref" x="433" y="127" text-anchor="start">C1</text>
+<text class="val" x="433" y="139" text-anchor="start">1000 мкФ</text>
+<rect class="blk" x="488" y="70" width="156" height="94" rx="3"/>
+<text class="btitle" x="566.0" y="88" text-anchor="middle">Модуль MP1584</text>
+<text class="val" x="566.0" y="102" text-anchor="middle">buck, подстроечник</text>
+<text class="ref" x="478" y="66" text-anchor="start">U2</text>
+<text class="val" x="566" y="132" text-anchor="middle">выход 3,6 В</text>
+<text class="val" x="566" y="144" text-anchor="middle">3 А пик</text>
+<text class="pin" x="494" y="114" text-anchor="start">IN+</text>
+<text class="pin" x="494" y="150" text-anchor="start">IN−</text>
+<text class="pin" x="638" y="114" text-anchor="end">OUT+</text>
+<text class="pin" x="638" y="150" text-anchor="end">OUT−</text>
+<polyline class="w gnd" points="476,146 488,146"/>
+<polyline class="w gnd" points="476,146 476,164"/>
+<g class="g gnd"><line x1="476" y1="164" x2="476" y2="170"/><line x1="468" y1="170" x2="484" y2="170"/><line x1="471" y1="173" x2="481" y2="173"/><line x1="474" y1="176" x2="478" y2="176"/></g>
+<polyline class="w gnd" points="644,146 654,146 654,164"/>
+<g class="g gnd"><line x1="654" y1="164" x2="654" y2="170"/><line x1="646" y1="170" x2="662" y2="170"/><line x1="649" y1="173" x2="659" y2="173"/><line x1="652" y1="176" x2="656" y2="176"/></g>
+<polyline class="w vm" points="644,110 796,110"/>
+<circle class="dot vm" cx="690" cy="110" r="3"/>
+<polyline class="w vm" points="690,110 690,124"/>
+<line class="plate" x1="681" y1="124" x2="699" y2="124"/>
+<line class="plate" x1="681" y1="130" x2="699" y2="130"/>
+<text class="pol" x="677" y="122" text-anchor="middle">+</text>
+<polyline class="w gnd" points="690,130 690,140"/>
+<g class="g gnd"><line x1="690" y1="140" x2="690" y2="146"/><line x1="682" y1="146" x2="698" y2="146"/><line x1="685" y1="149" x2="695" y2="149"/><line x1="688" y1="152" x2="692" y2="152"/></g>
+<text class="ref" x="703" y="127" text-anchor="start">C2</text>
+<text class="val" x="703" y="139" text-anchor="start">470–1000 мкФ</text>
+<circle class="jpin" cx="800" cy="110" r="3.5"/>
+<circle class="jpin" cx="844" cy="110" r="3.5"/>
+<line class="w sw" x1="803" y1="108" x2="840" y2="92"/>
+<text class="ref" x="822" y="80" text-anchor="middle">SW1</text>
+<text class="val" x="822" y="138" text-anchor="middle">аварийный</text>
+<text class="val" x="822" y="150" text-anchor="middle">стоп</text>
+<polyline class="w vm" points="847.5,110 1000,110"/>
+<text class="netvm" x="912" y="102" text-anchor="start">VM 3,6 В</text>
+<circle class="dot vm" cx="890" cy="110" r="3"/>
+<polyline class="w vm" points="890,110 890,128.0"/>
+<rect class="part" x="885.5" y="128.0" width="9" height="24"/>
+<polyline class="w vm" points="890,152.0 890,170"/>
+<text class="ref" x="902" y="136" text-anchor="start">R2</text>
+<text class="val" x="902" y="148" text-anchor="start">100 кОм</text>
+<circle class="dot sig" cx="890" cy="170" r="3"/>
+<polyline class="w sig" points="890,170 890,188.0"/>
+<rect class="part" x="885.5" y="188.0" width="9" height="24"/>
+<polyline class="w sig" points="890,212.0 890,230"/>
+<text class="ref" x="902" y="196" text-anchor="start">R3</text>
+<text class="val" x="902" y="208" text-anchor="start">100 кОм</text>
+<g class="g gnd"><line x1="890" y1="230" x2="890" y2="236"/><line x1="882" y1="236" x2="898" y2="236"/><line x1="885" y1="239" x2="895" y2="239"/><line x1="888" y1="242" x2="892" y2="242"/></g>
+<polyline class="w sig" points="890,170 950,170"/>
+<polygon class="flag sig" points="950,170 958,161 1009.2,161 1009.2,179 958,179"/>
+<text class="flagt" x="962" y="174" text-anchor="start">VSENSE</text>
+<polygon class="flag vm" points="1000,110 992,101 969.6,101 969.6,119 992,119"/>
+<text class="flagt" x="973.6" y="114" text-anchor="start">VM</text>
+<polyline class="w vm" points="1000,110 1010,110"/>
+<text class="val" x="1016" y="92" text-anchor="end">→ U3, U4</text>
+<text class="note" x="150" y="300" text-anchor="start">Все ⏚ — одна общая земля: телефон (через USB), ESP32, X1, MP1584, U3, U4.</text>
+<text class="sect" x="150" y="352" text-anchor="start">УПРАВЛЕНИЕ И МОТОРЫ</text>
+<line class="rule" x1="150" y1="330" x2="1020" y2="330"/>
+<rect class="blk" x="40" y="400" width="240" height="500" rx="3"/>
+<text class="ref" x="58" y="460" text-anchor="start">U1</text>
+<text class="btitle" x="58" y="480" text-anchor="start">ESP32-C6</text>
+<text class="val" x="58" y="494" text-anchor="start">DevKitC-1</text>
+<text class="val" x="58" y="522" text-anchor="start">USB: D− 12 · D+ 13</text>
+<text class="val" x="58" y="536" text-anchor="start">(нативный USB)</text>
+<text class="val" x="58" y="564" text-anchor="start">GPIO8 — RGB LED</text>
+<text class="val" x="58" y="578" text-anchor="start">(на плате)</text>
+<text class="val" x="58" y="606" text-anchor="start">GPIO16/17 — отлад.</text>
+<text class="val" x="58" y="620" text-anchor="start">UART (опц.)</text>
+<text class="val" x="58" y="648" text-anchor="start">не использовать:</text>
+<text class="val" x="58" y="662" text-anchor="start">GPIO 4, 5, 9, 15</text>
+<rect class="port" x="52" y="394" width="28" height="10" rx="3"/>
+<polyline class="w gnd" points="80,900 80,912"/>
+<g class="g gnd"><line x1="80" y1="912" x2="80" y2="918"/><line x1="72" y1="918" x2="88" y2="918"/><line x1="75" y1="921" x2="85" y2="921"/><line x1="78" y1="924" x2="82" y2="924"/></g>
+<text class="pin" x="86" y="894" text-anchor="start">GND</text>
+<rect class="blk" x="600" y="400" width="180" height="210" rx="3"/>
+<text class="ref" x="690.0" y="488" text-anchor="middle">U3</text>
+<text class="btitle" x="690.0" y="506" text-anchor="middle">Модуль DRV8833 #A</text>
+<text class="val" x="690.0" y="520" text-anchor="middle">выводы по плате</text>
+<polyline class="w sig" points="280,430 600,430"/>
+<text class="pin" x="274" y="434" text-anchor="end">GPIO18</text>
+<text class="pin" x="606" y="434" text-anchor="start">IN1</text>
+<circle class="dot sig" cx="380" cy="430" r="3"/>
+<polyline class="w sig" points="380,430 380,434"/>
+<rect class="part" x="376.5" y="434" width="7" height="12"/>
+<g class="g gnd"><line x1="380" y1="446" x2="380" y2="450"/><line x1="374" y1="450" x2="386" y2="450"/><line x1="377" y1="453" x2="383" y2="453"/></g>
+<polyline class="w sig" points="280,460 600,460"/>
+<text class="pin" x="274" y="464" text-anchor="end">GPIO19</text>
+<text class="pin" x="606" y="464" text-anchor="start">IN2</text>
+<circle class="dot sig" cx="380" cy="460" r="3"/>
+<polyline class="w sig" points="380,460 380,464"/>
+<rect class="part" x="376.5" y="464" width="7" height="12"/>
+<g class="g gnd"><line x1="380" y1="476" x2="380" y2="480"/><line x1="374" y1="480" x2="386" y2="480"/><line x1="377" y1="483" x2="383" y2="483"/></g>
+<polyline class="w sig" points="280,490 600,490"/>
+<text class="pin" x="274" y="494" text-anchor="end">GPIO20</text>
+<text class="pin" x="606" y="494" text-anchor="start">IN3</text>
+<circle class="dot sig" cx="380" cy="490" r="3"/>
+<polyline class="w sig" points="380,490 380,494"/>
+<rect class="part" x="376.5" y="494" width="7" height="12"/>
+<g class="g gnd"><line x1="380" y1="506" x2="380" y2="510"/><line x1="374" y1="510" x2="386" y2="510"/><line x1="377" y1="513" x2="383" y2="513"/></g>
+<polyline class="w sig" points="280,520 600,520"/>
+<text class="pin" x="274" y="524" text-anchor="end">GPIO21</text>
+<text class="pin" x="606" y="524" text-anchor="start">IN4</text>
+<circle class="dot sig" cx="380" cy="520" r="3"/>
+<polyline class="w sig" points="380,520 380,524"/>
+<rect class="part" x="376.5" y="524" width="7" height="12"/>
+<g class="g gnd"><line x1="380" y1="536" x2="380" y2="540"/><line x1="374" y1="540" x2="386" y2="540"/><line x1="377" y1="543" x2="383" y2="543"/></g>
+<text class="pin" x="606" y="554" text-anchor="start">EEP</text>
+<polyline class="w sig" points="280,580 600,580"/>
+<text class="pin" x="274" y="584" text-anchor="end">GPIO2</text>
+<text class="pin" x="606" y="584" text-anchor="start">ULT</text>
+<text class="val" x="508" y="575" text-anchor="start">подтяжка внутр.</text>
+<polyline class="w vm" points="700,400 700,360 780,360"/>
+<polygon class="flag vm" points="700,360 692,351 669.6,351 669.6,369 692,369"/>
+<text class="flagt" x="673.6" y="364" text-anchor="start">VM</text>
+<circle class="dot vm" cx="760" cy="360" r="3"/>
+<polyline class="w vm" points="760,360 760,370"/>
+<line class="plate" x1="751" y1="370" x2="769" y2="370"/>
+<line class="plate" x1="751" y1="376" x2="769" y2="376"/>
+<text class="pol" x="747" y="368" text-anchor="middle">+</text>
+<polyline class="w gnd" points="760,376 760,380"/>
+<g class="g gnd"><line x1="752" y1="380" x2="768" y2="380"/><line x1="755" y1="383" x2="765" y2="383"/><line x1="758" y1="386" x2="762" y2="386"/></g>
+<text class="ref" x="774" y="370" text-anchor="start">C3</text>
+<text class="val" x="774" y="382" text-anchor="start">220–470 мкФ</text>
+<text class="pin" x="706" y="414" text-anchor="start">VCC</text>
+<polyline class="w gnd" points="630,610 630,620"/>
+<g class="g gnd"><line x1="630" y1="620" x2="630" y2="626"/><line x1="622" y1="626" x2="638" y2="626"/><line x1="625" y1="629" x2="635" y2="629"/><line x1="628" y1="632" x2="632" y2="632"/></g>
+<text class="pin" x="636" y="604" text-anchor="start">GND</text>
+<text class="pin" x="774" y="444" text-anchor="end">OUT1</text>
+<text class="pin" x="774" y="484" text-anchor="end">OUT2</text>
+<text class="pin" x="774" y="534" text-anchor="end">OUT3</text>
+<text class="pin" x="774" y="574" text-anchor="end">OUT4</text>
+<polyline class="w mot" points="780,440 940,440 940,445"/>
+<polyline class="w mot" points="780,480 940,480 940,475"/>
+<circle class="part" cx="940" cy="460" r="15"/>
+<text class="mname" x="940" y="464.5" text-anchor="middle">M</text>
+<text class="ref" x="962" y="458" text-anchor="start">M1</text>
+<text class="val" x="962" y="471" text-anchor="start">FL</text>
+<circle class="dot mot" cx="825" cy="440" r="3"/>
+<circle class="dot mot" cx="825" cy="480" r="3"/>
+<polyline class="w mot" points="825,440 825,457.0"/>
+<line class="plate" x1="817" y1="457.0" x2="833" y2="457.0"/>
+<line class="plate" x1="817" y1="463.0" x2="833" y2="463.0"/>
+<polyline class="w mot" points="825,463.0 825,480"/>
+<text class="ref" x="836" y="458.0" text-anchor="start">C5</text>
+<text class="val" x="836" y="470.0" text-anchor="start">100 нФ</text>
+<polyline class="w mot" points="780,530 940,530 940,535"/>
+<polyline class="w mot" points="780,570 940,570 940,565"/>
+<circle class="part" cx="940" cy="550" r="15"/>
+<text class="mname" x="940" y="554.5" text-anchor="middle">M</text>
+<text class="ref" x="962" y="548" text-anchor="start">M2</text>
+<text class="val" x="962" y="561" text-anchor="start">FR</text>
+<circle class="dot mot" cx="825" cy="530" r="3"/>
+<circle class="dot mot" cx="825" cy="570" r="3"/>
+<polyline class="w mot" points="825,530 825,547.0"/>
+<line class="plate" x1="817" y1="547.0" x2="833" y2="547.0"/>
+<line class="plate" x1="817" y1="553.0" x2="833" y2="553.0"/>
+<polyline class="w mot" points="825,553.0 825,570"/>
+<text class="ref" x="836" y="548.0" text-anchor="start">C6</text>
+<text class="val" x="836" y="560.0" text-anchor="start">100 нФ</text>
+<rect class="blk" x="600" y="690" width="180" height="210" rx="3"/>
+<text class="ref" x="690.0" y="778" text-anchor="middle">U4</text>
+<text class="btitle" x="690.0" y="796" text-anchor="middle">Модуль DRV8833 #B</text>
+<text class="val" x="690.0" y="810" text-anchor="middle">выводы по плате</text>
+<polyline class="w sig" points="280,720 600,720"/>
+<text class="pin" x="274" y="724" text-anchor="end">GPIO22</text>
+<text class="pin" x="606" y="724" text-anchor="start">IN1</text>
+<circle class="dot sig" cx="380" cy="720" r="3"/>
+<polyline class="w sig" points="380,720 380,724"/>
+<rect class="part" x="376.5" y="724" width="7" height="12"/>
+<g class="g gnd"><line x1="380" y1="736" x2="380" y2="740"/><line x1="374" y1="740" x2="386" y2="740"/><line x1="377" y1="743" x2="383" y2="743"/></g>
+<polyline class="w sig" points="280,750 600,750"/>
+<text class="pin" x="274" y="754" text-anchor="end">GPIO23</text>
+<text class="pin" x="606" y="754" text-anchor="start">IN2</text>
+<circle class="dot sig" cx="380" cy="750" r="3"/>
+<polyline class="w sig" points="380,750 380,754"/>
+<rect class="part" x="376.5" y="754" width="7" height="12"/>
+<g class="g gnd"><line x1="380" y1="766" x2="380" y2="770"/><line x1="374" y1="770" x2="386" y2="770"/><line x1="377" y1="773" x2="383" y2="773"/></g>
+<polyline class="w sig" points="280,780 600,780"/>
+<text class="pin" x="274" y="784" text-anchor="end">GPIO10</text>
+<text class="pin" x="606" y="784" text-anchor="start">IN3</text>
+<circle class="dot sig" cx="380" cy="780" r="3"/>
+<polyline class="w sig" points="380,780 380,784"/>
+<rect class="part" x="376.5" y="784" width="7" height="12"/>
+<g class="g gnd"><line x1="380" y1="796" x2="380" y2="800"/><line x1="374" y1="800" x2="386" y2="800"/><line x1="377" y1="803" x2="383" y2="803"/></g>
+<polyline class="w sig" points="280,810 600,810"/>
+<text class="pin" x="274" y="814" text-anchor="end">GPIO11</text>
+<text class="pin" x="606" y="814" text-anchor="start">IN4</text>
+<circle class="dot sig" cx="380" cy="810" r="3"/>
+<polyline class="w sig" points="380,810 380,814"/>
+<rect class="part" x="376.5" y="814" width="7" height="12"/>
+<g class="g gnd"><line x1="380" y1="826" x2="380" y2="830"/><line x1="374" y1="830" x2="386" y2="830"/><line x1="377" y1="833" x2="383" y2="833"/></g>
+<text class="pin" x="606" y="844" text-anchor="start">EEP</text>
+<polyline class="w sig" points="280,870 600,870"/>
+<text class="pin" x="274" y="874" text-anchor="end">GPIO3</text>
+<text class="pin" x="606" y="874" text-anchor="start">ULT</text>
+<text class="val" x="508" y="865" text-anchor="start">подтяжка внутр.</text>
+<polyline class="w vm" points="700,690 700,650 780,650"/>
+<polygon class="flag vm" points="700,650 692,641 669.6,641 669.6,659 692,659"/>
+<text class="flagt" x="673.6" y="654" text-anchor="start">VM</text>
+<circle class="dot vm" cx="760" cy="650" r="3"/>
+<polyline class="w vm" points="760,650 760,660"/>
+<line class="plate" x1="751" y1="660" x2="769" y2="660"/>
+<line class="plate" x1="751" y1="666" x2="769" y2="666"/>
+<text class="pol" x="747" y="658" text-anchor="middle">+</text>
+<polyline class="w gnd" points="760,666 760,670"/>
+<g class="g gnd"><line x1="752" y1="670" x2="768" y2="670"/><line x1="755" y1="673" x2="765" y2="673"/><line x1="758" y1="676" x2="762" y2="676"/></g>
+<text class="ref" x="774" y="660" text-anchor="start">C4</text>
+<text class="val" x="774" y="672" text-anchor="start">220–470 мкФ</text>
+<text class="pin" x="706" y="704" text-anchor="start">VCC</text>
+<polyline class="w gnd" points="630,900 630,910"/>
+<g class="g gnd"><line x1="630" y1="910" x2="630" y2="916"/><line x1="622" y1="916" x2="638" y2="916"/><line x1="625" y1="919" x2="635" y2="919"/><line x1="628" y1="922" x2="632" y2="922"/></g>
+<text class="pin" x="636" y="894" text-anchor="start">GND</text>
+<text class="pin" x="774" y="734" text-anchor="end">OUT1</text>
+<text class="pin" x="774" y="774" text-anchor="end">OUT2</text>
+<text class="pin" x="774" y="824" text-anchor="end">OUT3</text>
+<text class="pin" x="774" y="864" text-anchor="end">OUT4</text>
+<polyline class="w mot" points="780,730 940,730 940,735"/>
+<polyline class="w mot" points="780,770 940,770 940,765"/>
+<circle class="part" cx="940" cy="750" r="15"/>
+<text class="mname" x="940" y="754.5" text-anchor="middle">M</text>
+<text class="ref" x="962" y="748" text-anchor="start">M3</text>
+<text class="val" x="962" y="761" text-anchor="start">RL</text>
+<circle class="dot mot" cx="825" cy="730" r="3"/>
+<circle class="dot mot" cx="825" cy="770" r="3"/>
+<polyline class="w mot" points="825,730 825,747.0"/>
+<line class="plate" x1="817" y1="747.0" x2="833" y2="747.0"/>
+<line class="plate" x1="817" y1="753.0" x2="833" y2="753.0"/>
+<polyline class="w mot" points="825,753.0 825,770"/>
+<text class="ref" x="836" y="748.0" text-anchor="start">C7</text>
+<text class="val" x="836" y="760.0" text-anchor="start">100 нФ</text>
+<polyline class="w mot" points="780,820 940,820 940,825"/>
+<polyline class="w mot" points="780,860 940,860 940,855"/>
+<circle class="part" cx="940" cy="840" r="15"/>
+<text class="mname" x="940" y="844.5" text-anchor="middle">M</text>
+<text class="ref" x="962" y="838" text-anchor="start">M4</text>
+<text class="val" x="962" y="851" text-anchor="start">RR</text>
+<circle class="dot mot" cx="825" cy="820" r="3"/>
+<circle class="dot mot" cx="825" cy="860" r="3"/>
+<polyline class="w mot" points="825,820 825,837.0"/>
+<line class="plate" x1="817" y1="837.0" x2="833" y2="837.0"/>
+<line class="plate" x1="817" y1="843.0" x2="833" y2="843.0"/>
+<polyline class="w mot" points="825,843.0 825,860"/>
+<text class="ref" x="836" y="838.0" text-anchor="start">C8</text>
+<text class="val" x="836" y="850.0" text-anchor="start">100 нФ</text>
+<polyline class="w sig" points="280,550 600,550"/>
+<text class="pin" x="274" y="554" text-anchor="end">GPIO6</text>
+<circle class="dot sig" cx="380" cy="550" r="3"/>
+<polyline class="w sig" points="380,550 380,554"/>
+<rect class="part" x="376.5" y="554" width="7" height="12"/>
+<g class="g gnd"><line x1="380" y1="566" x2="380" y2="570"/><line x1="374" y1="570" x2="386" y2="570"/><line x1="377" y1="573" x2="383" y2="573"/></g>
+<circle class="dot sig" cx="500" cy="550" r="3"/>
+<polyline class="w sig" points="500,550 500,840 600,840"/>
+<text class="val" x="508" y="835" text-anchor="start">EEP обоих</text>
+<text class="ref" x="380" y="604" text-anchor="middle">R4–R12</text>
+<text class="val" x="380" y="616" text-anchor="middle">10 кОм → ⏚</text>
+<polyline class="w sig" points="280,640 310,640"/>
+<polygon class="flag sig" points="310,640 318,631 369.2,631 369.2,649 318,649"/>
+<text class="flagt" x="322" y="644" text-anchor="start">VSENSE</text>
+<text class="pin" x="274" y="644" text-anchor="end">GPIO1</text>
+<text class="val" x="274" y="656" text-anchor="end">ADC1</text>
+</svg>
+    </div>
+    <figcaption>Моторы питаются через модуль MP1584 (3,6 В) от VBUS телефона или от внешнего разъёма X1. Источник выбирает J1: один джемпер не даёт соединить оба источника. ESP32 питается только от телефона по USB в обоих режимах.</figcaption>
+  </figure>
+  <div class="cols">
+    <section>
+      <h2>Цвета цепей</h2>
+      <ul class="legend">
+        <li><span class="sw-k" style="border-color: var(--v5)"></span><span>5 В VBUS телефона. На эту шину не подаётся ничего другого.</span></li>
+        <li><span class="sw-k" style="border-color: var(--ext)"></span><span>Внешний источник 5–12 В, только до J1-3.</span></li>
+        <li><span class="sw-k" style="border-color: var(--vm)"></span><span>VM 3,6 В после buck и SW1, питание моторов.</span></li>
+        <li><span class="sw-k" style="border-color: var(--gnd)"></span><span>Общая земля.</span></li>
+        <li><span class="sw-k" style="border-color: var(--sig)"></span><span>Сигналы 3,3 В и выводы моторов.</span></li>
+      </ul>
+      <h2 style="margin-top:18px">Что проверить</h2>
+      <ul class="rules">
+        <li>MP1584 выставить на 3,6 В без нагрузки, до подключения моторов.</li>
+        <li>На J1 один джемпер. Без джемпера VM = 0, телеметрия покажет низкое VM.</li>
+        <li>R4–R12 держат IN и EEP в нуле при сбросе и прошивке ESP32.</li>
+        <li>Делитель R2/R3 даёт ≤ 1,8 В на GPIO1 при VM 3,6 В; предупреждение при VM &lt; 3,2 В.</li>
+        <li>Подписи выводов модулей разные: EEP = nSLEEP, ULT = nFAULT, IN1–IN4 = AIN1, AIN2, BIN1, BIN2, OUT1–OUT4 = AOUT1…BOUT2. Сверить со своей платой.</li>
+        <li>Прозвонить модуль: если EEP уже подтянут к VCC резистором или перемычкой на плате, снять её, иначе R12 и GPIO6 не смогут усыпить драйвер.</li>
+        <li>Если на модуле ULT подтянут к VCC (VM 3,6 В), это на пределе для входа ESP32: снять эту подтяжку, хватит внутренней.</li>
+      </ul>
+    </section>
+    <section>
+      <h2>Перечень элементов</h2>
+      <div class="tbl"><table>
+        <thead><tr><th>Поз.</th><th>Элемент</th></tr></thead>
+        <tbody>
+          <tr><td>U1</td><td>ESP32-C6-DevKitC-1, нативный USB</td></tr>
+          <tr><td>U2</td><td>Модуль MP1584 (IN+, IN−, OUT+, OUT−), регулируемый подстроечником, 3,6 В; конденсаторы на плате есть, C1 и C2 — дополнительно</td></tr>
+          <tr><td>U3, U4</td><td>Модуль DRV8833 (IN1–IN4, OUT1–OUT4, EEP, ULT, VCC, GND)</td></tr>
+          <tr><td>X1</td><td>Разъём с ключом XT30 или JST-PH, внешний 5–12 В</td></tr>
+          <tr><td>Q1</td><td>AO3401, P-MOSFET, защита от переполюсовки</td></tr>
+          <tr><td>J1</td><td>Гребёнка 3 пина 2,54 мм + джемпер</td></tr>
+          <tr><td>SW1</td><td>Выключатель, аварийный стоп VM</td></tr>
+          <tr><td>R1</td><td>10 кОм, затвор Q1</td></tr>
+          <tr><td>R2, R3</td><td>100 кОм, делитель VM</td></tr>
+          <tr><td>R4–R12</td><td>10 кОм на GND: 8 × IN, EEP</td></tr>
+          <tr><td>C1</td><td>1000 мкФ, вход buck</td></tr>
+          <tr><td>C2</td><td>470–1000 мкФ, выход buck</td></tr>
+          <tr><td>C3, C4</td><td>220–470 мкФ на VCC каждого модуля (в дополнение к конденсаторам на плате)</td></tr>
+          <tr><td>C5–C8</td><td>100 нФ керамика на выводах моторов</td></tr>
+          <tr><td>M1–M4</td><td>Мотор-редукторы 3,3 В: FL, FR, RL, RR</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+  </div>
+</main>
+<script>
+(() => {
+  const fig = document.getElementById('sch');
+  const btns = document.querySelectorAll('.seg button');
+  btns.forEach(b => b.addEventListener('click', () => {
+    fig.dataset.src = b.dataset.src;
+    btns.forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  }));
+})();
+</script>
