@@ -68,7 +68,10 @@ class UsbLink(
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, intent: Intent) {
             when (intent.action) {
-                UsbManager.ACTION_USB_DEVICE_DETACHED -> scope.launch { closePort() }
+                UsbManager.ACTION_USB_DEVICE_DETACHED -> scope.launch {
+                    permissionAsked = false
+                    closePort()
+                }
                 UsbManager.ACTION_USB_DEVICE_ATTACHED -> scope.launch { tryOpen() }
                 ACTION_PERMISSION -> scope.launch {
                     if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
@@ -78,18 +81,6 @@ class UsbLink(
                     }
                 }
             }
-        }
-    }
-
-    private val listener = object : SerialInputOutputManager.Listener {
-        override fun onNewData(data: ByteArray) {
-            val frames = synchronized(parser) { parser.feed(data, clock()) }
-            frames.forEach { _incoming.tryEmit(it) }
-            _parserErrors.value = parser.crcErr
-        }
-
-        override fun onRunError(e: Exception) {
-            scope.launch { closePort() }
         }
     }
 
@@ -169,6 +160,17 @@ class UsbLink(
         synchronized(parser) { parser.reset() }
         queue.clear()
         port = p
+        val listener = object : SerialInputOutputManager.Listener {
+            override fun onNewData(data: ByteArray) {
+                val frames = synchronized(parser) { parser.feed(data, clock()) }
+                frames.forEach { _incoming.tryEmit(it) }
+                _parserErrors.value = parser.crcErr
+            }
+
+            override fun onRunError(e: Exception) {
+                scope.launch { closePort(p) }
+            }
+        }
         io = SerialInputOutputManager(p, listener).also { it.start() }
         writer = scope.launch(Dispatchers.IO) {
             while (isActive) {
@@ -176,17 +178,19 @@ class UsbLink(
                 try {
                     p.write(bytes, WRITE_TIMEOUT_MS)
                 } catch (e: IOException) {
-                    scope.launch { closePort() }
+                    scope.launch { closePort(p) }
                     break
                 }
             }
         }
+        permissionAsked = false
         _state.value = LinkState.Connected
     }
 
     /** Writes queued STOP frames, then closes. The retry loop reopens the port if the link is still open. */
-    private fun closePort() {
+    private fun closePort(expected: UsbSerialPort? = null) {
         val p = port
+        if (expected != null && p !== expected) return
         if (p == null) {
             _state.value = LinkState.Disconnected
             return
