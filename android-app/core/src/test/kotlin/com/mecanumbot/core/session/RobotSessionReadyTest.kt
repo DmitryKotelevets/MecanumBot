@@ -156,4 +156,14 @@ class RobotSessionReadyTest {
         assertTrue(seqs.size > 256)
         seqs.zipWithNext().forEach { (a, b) -> assertEquals((a + 1) and 0xFF, b) }
     }
+
+    @Test
+    fun `every stop increments the stop counter`() = runTest {
+        val link = ScriptedLink()
+        val s = readySession(link)
+        val before = s.state.value.stops
+        s.stop()
+        s.stop()
+        assertEquals(before + 2, s.state.value.stops)
+    }
 }

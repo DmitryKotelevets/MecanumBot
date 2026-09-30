@@ -61,8 +61,8 @@ fun TestScreen(session: RobotSession, state: SessionState, inForeground: StateFl
                 Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Raw") })
             }
             when (tab) {
-                0 -> DriveTab(session, enabled)
-                else -> RawTab(session, enabled)
+                0 -> DriveTab(session, enabled, state.stops, inForeground)
+                else -> RawTab(session, enabled, state.stops, inForeground)
             }
         }
         TelemetryPanel(state, Modifier.weight(1f))
@@ -70,20 +70,23 @@ fun TestScreen(session: RobotSession, state: SessionState, inForeground: StateFl
 }
 
 @Composable
-private fun DriveTab(session: RobotSession, enabled: Boolean) {
+private fun DriveTab(session: RobotSession, enabled: Boolean, stops: Int, inForeground: StateFlow<Boolean>) {
     var limit by remember { mutableFloatStateOf(DEFAULT_LIMIT) } // reset to 30 % on entering the screen
     var left by remember { mutableStateOf(Offset.Zero) }
     var right by remember { mutableStateOf(Offset.Zero) }
     var holding by remember { mutableStateOf(false) }
 
     DisposableEffect(session) { onDispose { session.stop() } }
-    LaunchedEffect(enabled) { if (!enabled) holding = false }
+    // STOP (from anywhere) or losing READY/foreground drops the hold: motion needs a new press.
+    LaunchedEffect(enabled, stops) { holding = false }
     LaunchedEffect(holding, enabled) {
         if (!holding || !enabled) {
             session.update(Command(0f, 0f, 0f, false, Source.TEST))
             return@LaunchedEffect
         }
-        while (true) {
+        val armedAt = session.state.value.stops
+        // Exit at once on STOP or background, without waiting for recomposition.
+        while (session.state.value.stops == armedAt && inForeground.value) {
             // Reads the current stick and limit state on every frame: a new limit applies next frame.
             session.update(Command(left.x * limit, left.y * limit, right.x * limit, true, Source.TEST))
             delay(RobotSession.TICK_MS)
@@ -104,20 +107,26 @@ private fun DriveTab(session: RobotSession, enabled: Boolean) {
                 valueRange = 0.1f..1f,
                 modifier = Modifier.width(200.dp),
             )
-            HoldButton("Hold to drive", enabled, onHoldChange = { holding = it })
+            HoldButton("Hold to drive", enabled, resetKey = stops, onHoldChange = { holding = it })
         }
         Joystick("Turn", onChange = { right = Offset(it.x, 0f) })
     }
 }
 
 @Composable
-private fun RawTab(session: RobotSession, enabled: Boolean) {
+private fun RawTab(session: RobotSession, enabled: Boolean, stops: Int, inForeground: StateFlow<Boolean>) {
     val values = remember { mutableStateListOf(0, 0, 0, 0) }
 
     DisposableEffect(session) { onDispose { session.stop() } } // leaving the Raw tab
-    LaunchedEffect(enabled) {
-        if (!enabled) return@LaunchedEffect
-        while (true) {
+    LaunchedEffect(enabled, stops) {
+        // STOP, background or a lost session zero the sliders: motion needs a new slider move.
+        for (i in 0 until 4) values[i] = 0
+        if (!enabled) {
+            session.clearRaw()
+            return@LaunchedEffect
+        }
+        val armedAt = session.state.value.stops
+        while (session.state.value.stops == armedAt && inForeground.value) {
             session.setRaw(values.toList())
             delay(RobotSession.TICK_MS)
         }

@@ -83,6 +83,7 @@ class RobotSession(
     /** Clears every command and sends STOP ×3 at once, in any phase while the link is up. */
     fun stop() {
         arbiter.stop()
+        _state.update { it.copy(stops = it.stops + 1) }
         if (link.state.value == LinkState.Connected) repeat(3) { send(Stop, Priority.STOP) }
     }
 

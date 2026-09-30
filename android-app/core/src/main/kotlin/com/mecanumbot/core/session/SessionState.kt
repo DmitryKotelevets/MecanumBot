@@ -33,4 +33,6 @@ data class SessionState(
     val phoneParserErrors: Int = 0,
     val activeSource: Source? = null,
     val lastEvent: SessionEvent? = null,
+    /** Incremented by every stop(); the UI uses it to drop held input so motion needs a new press. */
+    val stops: Int = 0,
 )

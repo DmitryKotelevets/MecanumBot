@@ -21,9 +21,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 
-/** Deadman button: reports true while a finger is on it. Any cancel or disable reports false. */
+/** Deadman button: reports true while a finger is on it. Any cancel or disable reports false. Changing [resetKey] ends the current press. */
 @Composable
-fun HoldButton(text: String, enabled: Boolean, onHoldChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+fun HoldButton(text: String, enabled: Boolean, resetKey: Any? = null, onHoldChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
     var pressed by remember { mutableStateOf(false) }
     val report by rememberUpdatedState(onHoldChange)
     val background = when {
@@ -35,7 +35,7 @@ fun HoldButton(text: String, enabled: Boolean, onHoldChange: (Boolean) -> Unit, 
         modifier
             .size(width = 200.dp, height = 96.dp)
             .background(background, RoundedCornerShape(16.dp))
-            .pointerInput(enabled) {
+            .pointerInput(enabled, resetKey) {
                 if (!enabled) return@pointerInput
                 awaitEachGesture {
                     awaitFirstDown()
