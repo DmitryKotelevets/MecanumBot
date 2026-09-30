@@ -23,6 +23,7 @@ import java.io.IOException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -188,7 +189,7 @@ class UsbLink(
     }
 
     /** Writes queued STOP frames, then closes. The retry loop reopens the port if the link is still open. */
-    private fun closePort(expected: UsbSerialPort? = null) {
+    private suspend fun closePort(expected: UsbSerialPort? = null) {
         val p = port
         if (expected != null && p !== expected) return
         if (p == null) {
@@ -196,9 +197,10 @@ class UsbLink(
             return
         }
         port = null
-        queue.drainStops().forEach { runCatching { p.write(it, WRITE_TIMEOUT_MS) } }
-        writer?.cancel()
+        // Join the writer first so a MOTION frame it already took cannot land after the STOPs.
+        writer?.cancelAndJoin()
         writer = null
+        queue.drainStops().forEach { runCatching { p.write(it, WRITE_TIMEOUT_MS) } }
         io?.stop()
         io = null
         runCatching { p.close() }

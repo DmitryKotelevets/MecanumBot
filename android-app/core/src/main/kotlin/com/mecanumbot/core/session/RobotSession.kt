@@ -127,7 +127,7 @@ class RobotSession(
 
     private fun enterReady() {
         phaseJob?.cancel()
-        _state.update { it.copy(phase = Phase.READY) }
+        _state.update { it.copy(phase = Phase.READY, lastEvent = if (it.lastEvent == SessionEvent.NotResponding) null else it.lastEvent) }
         send(GetConfig, Priority.OTHER)
         phaseJob = scope.launch {
             launch {
@@ -190,7 +190,7 @@ class RobotSession(
             if (_state.value.phase != Phase.VERSION_MISMATCH) {
                 phaseJob?.cancel()
                 phaseJob = null
-                arbiter.stop()
+                stop()
                 _state.update { it.copy(phase = Phase.VERSION_MISMATCH) }
                 report(SessionEvent.VersionMismatch(ack.protoVer))
             }

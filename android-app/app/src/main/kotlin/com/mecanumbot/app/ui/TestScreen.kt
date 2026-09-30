@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -136,13 +137,17 @@ private fun RawTab(session: RobotSession, enabled: Boolean, stops: Int, inForegr
         for (i in 0 until 4) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("M${i + 1}", Modifier.width(40.dp))
-                Slider(
-                    value = values[i].toFloat(),
-                    onValueChange = { values[i] = it.roundToInt() },
-                    valueRange = -127f..127f,
-                    enabled = enabled,
-                    modifier = Modifier.weight(1f),
-                )
+                // key(stops): STOP tears down the slider and its gesture, so a finger still
+                // dragging cannot write its position back and undo the STOP; a new touch is needed.
+                key(stops) {
+                    Slider(
+                        value = values[i].toFloat(),
+                        onValueChange = { values[i] = it.roundToInt() },
+                        valueRange = -127f..127f,
+                        enabled = enabled,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 Text("${values[i]}", Modifier.width(48.dp))
             }
         }

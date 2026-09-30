@@ -70,12 +70,25 @@ class RobotSessionHandshakeTest {
     }
 
     @Test
+    fun `entering READY clears a stale not-responding event`() = runTest {
+        val link = ScriptedLink()
+        val s = newSession(link)
+        link.connect(); runCurrent()
+        advanceTimeBy(3_100); runCurrent()
+        assertEquals(SessionEvent.NotResponding, s.state.value.lastEvent)
+        link.receive(HelloAck(1, 0, 1, 1, 5)); runCurrent()
+        assertEquals(Phase.READY, s.state.value.phase)
+        assertNull(s.state.value.lastEvent)
+    }
+
+    @Test
     fun `version mismatch blocks motion`() = runTest {
         val link = ScriptedLink()
         val s = newSession(link)
         link.connect(); runCurrent()
         link.receive(HelloAck(2, 0, 1, 1, 5)); runCurrent()
         assertEquals(Phase.VERSION_MISMATCH, s.state.value.phase)
+        assertEquals(3, link.ofType(FrameType.STOP).size)
         assertEquals(SessionEvent.VersionMismatch(2), s.state.value.lastEvent)
         s.update(Command(0f, 1f, 0f, true, Source.TEST))
         advanceTimeBy(2_000); runCurrent()

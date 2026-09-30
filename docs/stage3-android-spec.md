@@ -12,7 +12,7 @@ Sources: DESIGN.md §5, §7, §10; protocol/PROTOCOL.md (source of truth for the
 
 **Done when** (DESIGN §10, stage 3):
 1. `./gradlew :core:test :fake:test` is green.
-2. On FakeLink the app drives the model, shows failsafe after the drive button is released, and handles reboot and wrong `proto_ver` injected from FaultControls.
+2. On FakeLink the app drives the model; after the drive button is released the motors stop and ENABLE clears; FAILSAFE shows when frames stop reaching the model (Drop incoming 100 % or Disconnect); reboot and wrong `proto_ver` injected from FaultControls are handled.
 3. On the real robot (wheels in the air) the wheels turn from the sticks and from the RAW sliders; pulling the cable stops the motors within `failsafe_ms` (300 ms).
 
 **In scope:** modules `:core`, `:fake`, `:usb`, `:app`; full Arbiter logic (only the TEST source is fed); Test screen core set; minimal settings.

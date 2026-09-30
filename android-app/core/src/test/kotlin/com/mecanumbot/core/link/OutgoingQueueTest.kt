@@ -17,8 +17,8 @@ class OutgoingQueueTest {
     fun `STOP before MOTION before OTHER`() {
         val q = OutgoingQueue()
         q.offer(b(3), Priority.OTHER)
-        q.offer(b(2), Priority.MOTION)
         q.offer(b(1), Priority.STOP)
+        q.offer(b(2), Priority.MOTION)
         assertEquals(listOf(1, 2, 3, null), List(4) { q.pollInt() })
     }
 
@@ -48,10 +48,18 @@ class OutgoingQueueTest {
     @Test
     fun `drainStops returns only STOP frames and leaves the rest`() {
         val q = OutgoingQueue()
-        q.offer(b(9), Priority.MOTION)
         repeat(3) { q.offer(b(it), Priority.STOP) }
+        q.offer(b(9), Priority.MOTION)
         assertEquals(listOf(0, 1, 2), q.drainStops().map { it[0].toInt() })
         assertEquals(9, q.pollInt())
+    }
+
+    @Test
+    fun `STOP drops an unsent MOTION frame`() {
+        val q = OutgoingQueue()
+        q.offer(b(9), Priority.MOTION)
+        repeat(3) { q.offer(b(it), Priority.STOP) }
+        assertEquals(listOf(0, 1, 2, null), List(4) { q.pollInt() })
     }
 
     @Test
