@@ -1,13 +1,13 @@
 # MecanumBot
 
-Проект: мобильная платформа на меканум-колёсах. Полный дизайн — DESIGN.md, протокол — protocol/PROTOCOL.md (источник истины для обеих сторон; заменяет DESIGN.md §3).
+Проект: мобильная платформа на меканум-колёсах. Полный дизайн — docs/DESIGN.md, протокол — protocol/PROTOCOL.md (источник истины для обеих сторон; заменяет DESIGN.md §3).
 
 ## Компоненты
 - firmware/ — PlatformIO, ESP32-C6, Arduino core 3.x. Тесты: `cd firmware && pio test -e native`. Сборка: `pio run -e esp32c6`. Консоль с Mac: `python3 firmware/tools/usb_console.py` (нужен pyserial).
 - android-app/ — Kotlin/Compose. Тесты core: `./gradlew :core:test`.
 - pilot-web/ — статика, копируется в android-app/app/src/main/assets/pilot/.
 - protocol/ — PROTOCOL.md, vectors.json и генератор gen_vectors.py (эталонная реализация на Python).
-- schematic/ — принципиальная схема: schematic.html генерируется `python3 schematic/gen_schematic.py`, вручную не править; при изменении hardware/wiring.md обновлять генератор.
+- hardware/schematic/ — принципиальная схема: schematic.html генерируется `python3 hardware/schematic/gen_schematic.py`, вручную не править; при изменении hardware/wiring.md обновлять генератор.
 - hardware/wiring.md — питание и распиновка; docs/measurements.md — результаты измерений этапа 0a.
 
 ## Правила

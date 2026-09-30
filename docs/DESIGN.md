@@ -449,7 +449,6 @@ data class Command(
 ## 8. Структура репозитория
 ```
 mecanumbot/
-├── DESIGN.md              — этот документ
 ├── CLAUDE.md              — инструкции для Claude Code (см. приложение A)
 ├── firmware/              — PlatformIO
 ├── android-app/           — Gradle, Kotlin
@@ -459,8 +458,11 @@ mecanumbot/
 │   └── vectors.json       — тестовые векторы для обеих сторон
 ├── hardware/
 │   ├── wiring.md          — схема подключения, распиновка
-│   └── cad/               — модели корпуса
-└── docs/                  — заметки, измерения, фото
+│   ├── cad/               — модели корпуса
+│   └── schematic/         — принципиальная схема (генератор + HTML)
+└── docs/
+    ├── DESIGN.md          — этот документ
+    └── ...                — заметки, измерения, фото
 ```
 
 ---

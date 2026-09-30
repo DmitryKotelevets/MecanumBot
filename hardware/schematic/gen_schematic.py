@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generates schematic.html (HTML + inline SVG). Run: python3 schematic/gen_schematic.py"""
+"""Generates schematic.html (HTML + inline SVG). Run: python3 hardware/schematic/gen_schematic.py"""
 import os
 
 out = []

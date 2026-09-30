@@ -2,7 +2,7 @@
 
 Прошивка ESP32-C6: принимает команды от телефона по USB, считает кинематику меканум-колёс и управляет четырьмя моторами через два DRV8833. PlatformIO + Arduino core 3.x (платформа pioarduino).
 
-- Дизайн: [DESIGN.md §4](../DESIGN.md)
+- Дизайн: [DESIGN.md §4](../docs/DESIGN.md)
 - Протокол USB (источник истины): [protocol/PROTOCOL.md](../protocol/PROTOCOL.md)
 - Подключение и распиновка: [hardware/wiring.md](../hardware/wiring.md)
 
