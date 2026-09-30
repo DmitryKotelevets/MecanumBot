@@ -4,7 +4,7 @@
 
 ## Компоненты
 - firmware/ — PlatformIO, ESP32-C6, Arduino core 3.x. Тесты: `cd firmware && pio test -e native`. Сборка: `pio run -e esp32c6`. Консоль с Mac: `python3 firmware/tools/usb_console.py` (нужен pyserial).
-- android-app/ — Kotlin/Compose. Тесты core: `./gradlew :core:test`.
+- android-app/ — Kotlin/Compose, модули core, fake, usb, app. Тесты: `cd android-app && ./gradlew :core:test :fake:test` (JAVA_HOME = JBR из Android Studio, см. android-app/README.md).
 - pilot-web/ — статика, копируется в android-app/app/src/main/assets/pilot/.
 - protocol/ — PROTOCOL.md, vectors.json и генератор gen_vectors.py (эталонная реализация на Python).
 - hardware/schematic/ — принципиальная схема: schematic.html генерируется `python3 hardware/schematic/gen_schematic.py`, вручную не править; при изменении hardware/wiring.md обновлять генератор.

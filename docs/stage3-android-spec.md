@@ -110,7 +110,7 @@ Created with a `Link`, a `CoroutineScope`, a clock `() -> Long` and the app vers
 
 ESP32 LOG frames go to `events` only; they don't replace the last event shown in the status bar.
 
-**`SessionState`:** link state, phase, fw version, `reset_reason`/`reset_count`, last `TelemetryState` (decoded flags, `pwm[4]`, `vm_mv`, `crc_err`, `rx_frames`, `uptime_s`, `loop_max_us`), telemetry age, RTT, DRIVE/MOTOR_RAW frames sent in the last second, phone-side parser errors, active source, last event.
+**`SessionState`:** link state, phase, fw version, `reset_reason`/`reset_count`, last `TelemetryState` (decoded flags, `pwm[4]`, `vm_mv`, `crc_err`, `rx_frames`, `uptime_s`, `loop_max_us`), telemetry age, RTT, DRIVE/MOTOR_RAW frames sent in the last second, phone-side parser errors, active source, last event, and `stops` (incremented by every `stop()`).
 
 ## 7. FakeLink and FakeEsp32 (:fake)
 
@@ -173,6 +173,7 @@ One Activity, Compose, landscape, `FLAG_KEEP_SCREEN_ON`. All UI text in English.
 - Motion exists only while the UI keeps refreshing it; the Arbiter drops TEST and RAW after 300 ms, the ESP32 failsafe covers everything else.
 - Activity `onPause` → `session.stop()` (STOP ×3); the Test screen is disabled until `onResume`.
 - Leaving the Test screen or the Raw tab → `stop()`.
+- STOP latches in the UI: every `stop()` increments `SessionState.stops`; the Test screen then drops a held "Hold to drive" (a new press is needed), zeroes the RAW sliders, and its send loops exit at once. Losing READY or the foreground also clears RAW.
 - STOP and failsafe are instant; the app never ramps a stop.
 
 **Errors:**
