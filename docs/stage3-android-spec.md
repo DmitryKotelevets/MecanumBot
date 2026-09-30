@@ -1,6 +1,6 @@
 # Stage 3 — Android app: core, FakeLink, USB, Test screen
 
-Spec version 1.0, 2026-09-30. Status: approved design, implementation not started.
+Spec version 1.1, 2026-09-30. Status: approved design, implementation not started.
 
 Sources: DESIGN.md §5, §7, §10; protocol/PROTOCOL.md (source of truth for the wire format and ESP32 behaviour); CLAUDE.md rules. This document narrows DESIGN.md §5 to stage 3 and records the decisions DESIGN.md leaves open. Where it deviates from DESIGN.md, the deviation is listed in §10.
 
@@ -32,7 +32,7 @@ android-app/
 │   │              FrameCodec (encode/decode), FrameParser (PROTOCOL §3.1)
 │   ├── link/      interface Link, LinkState, Priority
 │   ├── control/   Command, Source, Mode, Arbiter, Mecanum (mix)
-│   └── session/   RobotSession, SessionState, TelemetryState, LinkStats, SessionEvent
+│   └── session/   RobotSession, SessionState, TelemetryState, SessionEvent
 ├── fake/   kotlin("jvm"), depends on :core
 │   └── FakeLink (implements Link), FakeEsp32 (firmware model), FaultControls
 ├── usb/    com.android.library, depends on :core and usb-serial-for-android
@@ -43,7 +43,7 @@ android-app/
 
 - `:core` and `:fake` are plain JVM modules, so the build enforces the CLAUDE.md rule that core has no Android dependencies, and both are tested with plain JVM tests.
 - Dependency wiring: a hand-written `AppGraph` created in `Application`. No DI framework.
-- SDK: minSdk 34, compileSdk and targetSdk 36. Kotlin 2.x, current stable AGP and Compose BOM (exact versions fixed in the implementation plan). JVM toolchain 17.
+- SDK: minSdk 34, compileSdk 37 (required by the current Compose BOM), targetSdk 36. AGP 9 with built-in Kotlin, Kotlin 2.x, current Compose BOM (exact versions fixed in the implementation plan). Bytecode target JVM 17; Gradle runs on Android Studio's JBR 21.
 - Modules `server`, `camera`, `input`, `sensors` from DESIGN §5.2 are created in their stages.
 
 ## 3. Protocol in :core
@@ -62,7 +62,7 @@ interface Link {
     val incoming: Flow<Frame>                // frames accepted by the link's FrameParser
     val parserErrors: StateFlow<Int>         // phone-side crc_err
     suspend fun open()
-    suspend fun close()
+    suspend fun close()                      // writes queued STOP frames first
     fun send(bytes: ByteArray, priority: Priority)   // non-blocking
 }
 enum class Priority { STOP, MOTION, OTHER }
@@ -71,16 +71,17 @@ enum class Priority { STOP, MOTION, OTHER }
 - Links move bytes; they don't assign `seq`. `RobotSession` builds and encodes every frame, so `seq` handling is identical for UsbLink and FakeLink.
 - Outgoing queue per link, ordered STOP > MOTION > OTHER. A MOTION frame not yet written is replaced by the newer one instead of queuing (PROTOCOL §6).
 - Each link runs its own `FrameParser`, so FakeLink exercises the codec and parser end to end.
+- `close()` delivers any queued STOP frames before closing, so STOP ×3 survives a link switch.
 
 ## 5. Arbiter (:core)
 
 Pure, driven by `now: Long` (ms). Implements DESIGN §5.4 completely; stage 3 feeds only `Source.TEST`.
 
-- `update(source, Command)`: stores the command with its timestamp. `Command(vx, vy, w: Float, enable: Boolean, source: Source)`.
-- `setRaw(m: IntArray)` / `clearRaw()`: RAW mode; values are i8 per physical channel. RAW is also subject to the 300 ms freshness rule: the Test screen must refresh it, so a frozen UI can't hold the motors.
+- `update(command, now)`: stores the command for `command.source` with its timestamp. `Command(vx, vy, w: Float, enable: Boolean, source: Source)`.
+- `setRaw(m: List<Int>, now)` / `clearRaw()`: RAW mode; values are i8 per physical channel. RAW is also subject to the 300 ms freshness rule: the Test screen must refresh it, so a frozen UI can't hold the motors.
 - `setMode(Mode)`: `AUTO`, `LOCAL_ONLY` (TEST and LOCAL_PAD), `REMOTE_ONLY` (TEST and REMOTE). TEST is always allowed, because it is the on-robot bench screen.
-- `stop()`: clears RAW and all source commands; the next three outputs are STOP, then zero DRIVE.
-- `tick(now): Output` — `Stop`, `Raw(m)`, or `Drive(flags, vx, vy, w)`. Active source: highest priority TEST > LOCAL_PAD > REMOTE among those allowed by the mode, updated less than 300 ms ago, with `enable = true`. No active source: `Drive` with zeros and enable=0 (the pulse). DRIVE `flags` carry enable in bit0 and the source in bits 1..2 (PROTOCOL §4.1).
+- `stop()`: clears RAW and all source commands. STOP ×3 itself is sent by `RobotSession.stop()`, not produced by `tick`.
+- `tick(now): Output` — `Raw(m)` or `Drive(flags, vx, vy, w)`. Active source: highest priority TEST > LOCAL_PAD > REMOTE among those allowed by the mode, updated less than 300 ms ago, with `enable = true`. No active source: `Drive` with zeros and enable=0 (the pulse). DRIVE `flags` carry enable in bit0 and the source in bits 1..2 (PROTOCOL §4.1).
 - The speed limit is applied by the caller (Test screen) before `update`.
 
 `Mecanum` in `:core/control` implements the mix and calibration from DESIGN §4.4 / PROTOCOL §2.1 (map, invert, trim, max_duty, min_duty, dead zone). It is used by FakeEsp32 to produce `pwm`; the app itself never mixes, the ESP32 does.
@@ -99,12 +100,15 @@ Created with a `Link`, a `CoroutineScope`, a clock `() -> Long` and the app vers
 | `Ready` | HELLO_ACK with matching `proto_ver` | 40 Hz tick, PING 1 Hz, GET_CONFIG once |
 
 **In `Ready`:**
-- Every 25 ms: `arbiter.tick(now)` → encode → `link.send` (STOP with `Priority.STOP`, DRIVE/MOTOR_RAW with `MOTION`).
+- Every 25 ms: `arbiter.tick(now)` → encode → `link.send` with `Priority.MOTION`.
+- `stop()`: `arbiter.stop()`, then three STOP frames with `Priority.STOP` immediately (whenever the link is connected, in any phase); the tick continues with zero DRIVE.
 - PING every 1 s with `ts = now`; RTT from the matching PONG.
 - GET_CONFIG once after the handshake; `failsafe_ms` and `max_duty` from CONFIG_DATA are kept in the state for display.
 - No DRIVE, MOTOR_RAW, CONFIG or OTA_* is sent before `Ready` (PROTOCOL §5.1).
 
-**Unsolicited HELLO_ACK** (any HELLO_ACK in `Ready`): if `reset_count` differs from the last known value, emit event "ESP32 rebooted: reason N"; otherwise "Port reopened". In both cases `arbiter.stop()` and re-check `proto_ver`.
+**Reboot detection.** The last `reset_count` is kept across link reconnects. Any HELLO_ACK (in any phase) whose `reset_count` differs from the last known value emits "ESP32 rebooted: reason N" and calls `stop()`. On real hardware a reboot re-enumerates USB, so it is usually seen during `Handshaking`. A HELLO_ACK in `Ready` with the same `reset_count` is the duplicate the ESP32 sends on host connect (PROTOCOL §5.6) and is ignored. Every HELLO_ACK re-checks `proto_ver`.
+
+ESP32 LOG frames go to `events` only; they don't replace the last event shown in the status bar.
 
 **`SessionState`:** link state, phase, fw version, `reset_reason`/`reset_count`, last `TelemetryState` (decoded flags, `pwm[4]`, `vm_mv`, `crc_err`, `rx_frames`, `uptime_s`, `loop_max_us`), telemetry age, RTT, DRIVE/MOTOR_RAW frames sent in the last second, phone-side parser errors, active source, last event.
 
@@ -132,7 +136,7 @@ Created with a `Link`, a `CoroutineScope`, a clock `() -> Long` and the app vers
 | nFAULT A / B | sets telemetry flag bit1 / bit2 |
 | VM sag | extra sag in mV (slider 0–1500) |
 | Drop incoming | percentage of phone→ESP32 frames discarded |
-| Inject garbage | writes random bytes and a stray `0xAA` into the stream |
+| Inject garbage | writes fixed garbage bytes with stray `0xAA`s into both directions |
 
 ## 8. UsbLink (:usb)
 
@@ -185,6 +189,7 @@ One Activity, Compose, landscape, `FLAG_KEEP_SCREEN_ON`. All UI text in English.
 | minSdk 26 (§5.1) | minSdk 34 | single device (Pixel 9a, Android 15+); no compatibility code |
 | Russian screen names (§5.9) | English UI text | decision 2026-09-30 |
 | FakeLink chosen "in settings or when no device" (§5.5) | explicit switch only | an automatic fallback could hide a cable fault while you think you're driving the robot |
+| DESIGN §5.4 arbiter emits STOP ×3 | `RobotSession.stop()` sends STOP ×3; the Arbiter only clears | keeps the Arbiter's output a pure function of commands and time |
 | Foreground Service holds USB (§5.10) | application-scoped `AppGraph` | the service is needed with the server in stage 5; `RobotSession` has no Android dependencies and moves into it unchanged |
 | module `fake` (§5.2) | plain JVM module | testable with JVM tests; no Android APIs needed |
 
@@ -197,7 +202,7 @@ One Activity, Compose, landscape, `FLAG_KEEP_SCREEN_ON`. All UI text in English.
 - `FrameParser`: every `streams[]` entry — feed `chunks` one call each, compare `expected_frames` and `expected_crc_err`; plus `flushStale`.
 - `Arbiter`: priority order, 300 ms timeout per source, modes, zero pulse, RAW freshness, STOP ×3 then zero DRIVE, flags encoding, float → i8.
 - `Mecanum`: PROTOCOL §2.1 signs (`vx=+1` → FL+, FR−, RL−, RR+; `w=+1` → left forward, right back), normalization, map/invert/trim, dead zone.
-- `RobotSession` with a scripted in-memory `Link` on virtual time: no motion frames before a matching HELLO_ACK; HELLO retry; version mismatch blocks motion; 40 Hz cadence (40 ± 1 frames per virtual second); zero pulse without a source; STOP ×3 comes first after `stop()`; reboot vs port-reopened detection; RTT from PONG; reset to Disconnected on link loss.
+- `RobotSession` with a scripted in-memory `Link` on virtual time: no motion frames before a matching HELLO_ACK; HELLO retry; version mismatch blocks motion; 40 Hz cadence (40 ± 1 frames per virtual second); zero pulse without a source; STOP ×3 sent immediately on `stop()`; reboot detection across reconnects and duplicate HELLO_ACK ignored; RTT from PONG; reset to Disconnected on link loss.
 
 **`:fake:test`:**
 - FakeEsp32 against PROTOCOL §5: failsafe fires after `failsafe_ms` and clears on the next DRIVE; STOP → ACK OK; invalid CONFIG → ERR and unchanged CONFIG_DATA; BUSY in OTA/WIFI; OTA offset handling; telemetry at 10 Hz with pwm from the mix.
