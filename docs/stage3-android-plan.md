@@ -11,7 +11,7 @@
 - Libraries: kotlinx-coroutines 1.11.0, Compose BOM 2026.09.00 (Material 3), DataStore 1.2.1, usb-serial-for-android 3.11.0 (JitPack)
 - Tests: JUnit 6.1.3 (Jupiter), kotlinx-coroutines-test, kotlinx-serialization-json (test only, to read `vectors.json`)
 
-**Verified:** on 2026-09-30 every file in this plan was extracted into a scratch copy and built. `:core:test` and `:fake:test` ran 182 tests with 0 failures, and `:usb:assembleDebug` and `:app:assembleDebug` succeeded. If a step fails as written, suspect the environment (JDK, SDK) before the code.
+**Verified:** on 2026-09-30 every file in this plan was extracted into a scratch copy and built. `:core:test` and `:fake:test` ran 182 tests with 0 failures, and `:usb:assembleDebug` and `:app:assembleDebug` succeeded. So the compile and test steps of Tasks 1–10 are known to pass, and if one fails as written, suspect the environment (JDK, SDK) before the code. Tasks 11–13 were only compiled: UsbLink never opened a port and no Compose code ran, so the manual steps in Tasks 12–14 test behaviour nobody has checked yet.
 
 **Spec:** `docs/stage3-android-spec.md` (v1.1). The wire format and the ESP32 behaviour come from `protocol/PROTOCOL.md`; the executor reads both.
 

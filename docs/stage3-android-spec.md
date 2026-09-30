@@ -200,7 +200,7 @@ One Activity, Compose, landscape, `FLAG_KEEP_SCREEN_ON`. All UI text in English.
 - `FrameType`: table matches `types[]`.
 - `FrameCodec`: every `frames[]` entry — encode `fields` → `frame_hex`, decode `frame_hex` → `fields`.
 - `FrameParser`: every `streams[]` entry — feed `chunks` one call each, compare `expected_frames` and `expected_crc_err`; plus `flushStale`.
-- `Arbiter`: priority order, 300 ms timeout per source, modes, zero pulse, RAW freshness, STOP ×3 then zero DRIVE, flags encoding, float → i8.
+- `Arbiter`: priority order, 300 ms timeout per source, modes, zero pulse, RAW freshness, `stop()` clears everything, flags encoding, float → i8.
 - `Mecanum`: PROTOCOL §2.1 signs (`vx=+1` → FL+, FR−, RL−, RR+; `w=+1` → left forward, right back), normalization, map/invert/trim, dead zone.
 - `RobotSession` with a scripted in-memory `Link` on virtual time: no motion frames before a matching HELLO_ACK; HELLO retry; version mismatch blocks motion; 40 Hz cadence (40 ± 1 frames per virtual second); zero pulse without a source; STOP ×3 sent immediately on `stop()`; reboot detection across reconnects and duplicate HELLO_ACK ignored; RTT from PONG; reset to Disconnected on link loss.
 
