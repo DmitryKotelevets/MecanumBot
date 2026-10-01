@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * CDC-ACM link to the ESP32-C6 (spec §8). DTR/RTS are never touched: toggling them can put the
@@ -65,6 +66,7 @@ class UsbLink(
     private var writer: Job? = null
     private var loop: Job? = null
     private var permissionAsked = false
+    private var closing = false
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, intent: Intent) {
@@ -128,7 +130,7 @@ class UsbLink(
     }
 
     private fun tryOpen() {
-        if (port != null) return
+        if (port != null || closing) return
         val driver = prober.findAllDrivers(usb).firstOrNull()
         if (driver == null) {
             _state.value = LinkState.Disconnected
@@ -188,24 +190,37 @@ class UsbLink(
         _state.value = LinkState.Connected
     }
 
-    /** Writes queued STOP frames, then closes. The retry loop reopens the port if the link is still open. */
+    /**
+     * Writes queued STOP frames, then closes. The retry loop reopens the port if the link is still open.
+     * Exclusive: [closing] keeps tryOpen out until this close has finished, because the close suspends
+     * and a port opened meanwhile would lose its reader and queue to the tail of this one.
+     */
     private suspend fun closePort(expected: UsbSerialPort? = null) {
         val p = port
         if (expected != null && p !== expected) return
         if (p == null) {
-            _state.value = LinkState.Disconnected
+            if (!closing) _state.value = LinkState.Disconnected
             return
         }
         port = null
-        // Join the writer first so a MOTION frame it already took cannot land after the STOPs.
-        writer?.cancelAndJoin()
+        closing = true
+        val w = writer
+        val m = io
         writer = null
-        queue.drainStops().forEach { runCatching { p.write(it, WRITE_TIMEOUT_MS) } }
-        io?.stop()
         io = null
-        runCatching { p.close() }
-        queue.clear()
-        _state.value = LinkState.Disconnected
+        try {
+            // Join the writer first so a MOTION frame it already took cannot land after the STOPs.
+            w?.cancelAndJoin()
+            withContext(Dispatchers.IO) {
+                queue.drainStops().forEach { runCatching { p.write(it, WRITE_TIMEOUT_MS) } }
+                m?.stop()
+                runCatching { p.close() }
+            }
+            queue.clear()
+            _state.value = LinkState.Disconnected
+        } finally {
+            closing = false
+        }
     }
 
     private fun askPermission(device: UsbDevice) {
