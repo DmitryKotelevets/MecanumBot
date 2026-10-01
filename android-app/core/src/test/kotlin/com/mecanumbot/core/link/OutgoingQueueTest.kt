@@ -1,5 +1,6 @@
 package com.mecanumbot.core.link
 
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class OutgoingQueueTest {
     private fun b(v: Int) = byteArrayOf(v.toByte())
     private fun OutgoingQueue.pollInt(): Int? = poll()?.get(0)?.toInt()
