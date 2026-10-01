@@ -15,9 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -25,7 +23,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,22 +46,16 @@ import kotlin.math.roundToInt
 private const val DEFAULT_LIMIT = 0.3f
 
 @Composable
-fun TestScreen(session: RobotSession, state: SessionState, inForeground: StateFlow<Boolean>) {
+fun TestScreen(session: RobotSession, state: SessionState, inForeground: StateFlow<Boolean>, raw: Boolean) {
     val foreground by inForeground.collectAsStateWithLifecycle()
     val enabled = foreground && state.phase == Phase.READY
-    var tab by remember { mutableIntStateOf(0) }
     DisposableEffect(session) { onDispose { session.stop() } } // leaving the Test screen
 
     Row(Modifier.fillMaxSize().padding(8.dp)) {
         Column(Modifier.weight(2f)) {
-            PrimaryTabRow(selectedTabIndex = tab) {
-                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Drive") })
-                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Raw") })
-            }
-            when (tab) {
-                0 -> DriveTab(session, enabled, state.stops, inForeground)
-                else -> RawTab(session, enabled, state.stops, inForeground)
-            }
+            // Switching Drive <-> Raw disposes the other tab, and each tab stops the robot on dispose.
+            if (raw) RawTab(session, enabled, state.stops, inForeground)
+            else DriveTab(session, enabled, state.stops, inForeground)
         }
         TelemetryPanel(state, Modifier.weight(1f))
     }

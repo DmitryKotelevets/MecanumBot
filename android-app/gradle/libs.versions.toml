@@ -1,5 +1,5 @@
 [versions]
-agp = "9.3.1"
+agp = "9.3.3"
 kotlin = "2.4.20"
 coroutines = "1.11.0"
 serialization = "1.11.0"
@@ -21,6 +21,7 @@ junit-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 compose-material3 = { module = "androidx.compose.material3:material3" }
 compose-foundation = { module = "androidx.compose.foundation:foundation" }
+compose-material-icons = { module = "androidx.compose.material:material-icons-core" }
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
 lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
 datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }

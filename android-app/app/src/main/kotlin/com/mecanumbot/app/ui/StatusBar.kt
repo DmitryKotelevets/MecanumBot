@@ -4,16 +4,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -21,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mecanumbot.app.LinkKind
@@ -40,7 +42,6 @@ fun StatusBar(
     kind: LinkKind,
     state: SessionState,
     clock: () -> Long,
-    onStop: () -> Unit,
     onRequestPermission: () -> Unit,
 ) {
     val now by produceState(clock()) {
@@ -54,7 +55,7 @@ fun StatusBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Badge(kind.name, if (kind == LinkKind.FAKE) Amber else MaterialTheme.colorScheme.primary)
+        if (kind == LinkKind.FAKE) Badge(kind.name, Amber, Color.Black) else Badge(kind.name, MaterialTheme.colorScheme.primary)
         Column(Modifier.weight(1f)) {
             Text(phaseText(state), style = MaterialTheme.typography.titleSmall)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -81,20 +82,27 @@ fun StatusBar(
         if ((state.link as? LinkState.Error)?.message == UsbLink.NO_PERMISSION) {
             OutlinedButton(onClick = onRequestPermission) { Text("Request again") }
         }
-        Button(
-            onClick = onStop,
-            colors = ButtonDefaults.buttonColors(containerColor = Danger, contentColor = Color.White),
-            modifier = Modifier.size(width = 140.dp, height = 64.dp),
-        ) {
-            Text("STOP", fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        }
+    }
+}
+
+/** Vertical STOP pill; letters are stacked so it reads in a narrow rail. Always enabled. */
+@Composable
+fun StopButton(onStop: () -> Unit, modifier: Modifier = Modifier) {
+    Button(
+        onClick = onStop,
+        shape = RoundedCornerShape(percent = 50),
+        colors = ButtonDefaults.buttonColors(containerColor = Danger, contentColor = Color.White),
+        contentPadding = PaddingValues(0.dp),
+        modifier = modifier,
+    ) {
+        Text("S\nT\nO\nP", fontSize = 22.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
     }
 }
 
 @Composable
-private fun Badge(text: String, color: Color) {
+private fun Badge(text: String, color: Color, contentColor: Color = contentColorFor(color)) {
     Box(Modifier.background(color, RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 4.dp)) {
-        Text(text, color = Color.Black, style = MaterialTheme.typography.labelMedium)
+        Text(text, color = contentColor, style = MaterialTheme.typography.labelMedium)
     }
 }
 

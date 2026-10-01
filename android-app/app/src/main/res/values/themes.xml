@@ -1,0 +1,4 @@
+<resources>
+    <!-- Window theme before Compose draws; follows the system light/dark setting. -->
+    <style name="Theme.MecanumBot" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

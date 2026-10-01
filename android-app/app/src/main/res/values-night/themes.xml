@@ -1,0 +1,3 @@
+<resources>
+    <style name="Theme.MecanumBot" parent="android:Theme.Material.NoActionBar" />
+</resources>

@@ -26,10 +26,11 @@ import androidx.compose.ui.unit.dp
 fun HoldButton(text: String, enabled: Boolean, resetKey: Any? = null, onHoldChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
     var pressed by remember { mutableStateOf(false) }
     val report by rememberUpdatedState(onHoldChange)
-    val background = when {
-        pressed -> Color(0xFF2E7D32)
-        enabled -> MaterialTheme.colorScheme.surfaceVariant
-        else -> Color.DarkGray
+    val scheme = MaterialTheme.colorScheme
+    val (background, content) = when {
+        pressed -> Color(0xFF2E7D32) to Color.White
+        enabled -> scheme.surfaceVariant to scheme.onSurfaceVariant
+        else -> scheme.onSurface.copy(alpha = 0.12f) to scheme.onSurface.copy(alpha = 0.38f)
     }
     Box(
         modifier
@@ -51,6 +52,6 @@ fun HoldButton(text: String, enabled: Boolean, resetKey: Any? = null, onHoldChan
             },
         contentAlignment = Alignment.Center,
     ) {
-        Text(if (enabled) text else "$text (disabled)")
+        Text(if (enabled) text else "$text (disabled)", color = content)
     }
 }

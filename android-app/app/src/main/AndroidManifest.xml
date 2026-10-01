@@ -5,7 +5,7 @@
     <application
         android:name=".MecanumApp"
         android:label="MecanumBot"
-        android:theme="@android:style/Theme.Material.NoActionBar">
+        android:theme="@style/Theme.MecanumBot">
 
         <activity
             android:name=".MainActivity"
