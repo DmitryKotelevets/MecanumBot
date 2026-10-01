@@ -45,11 +45,29 @@ commands (speeds −1..1, scaled by `limit`):
   limit X          speed limit 0..1 (now {limit})
   hello | ping     handshake / round-trip time
   cfg              GET_CONFIG
-  set K=V ...      change config fields and send CONFIG (e.g. set invert=0,1,0,1 min_duty=20)
+  set K=V ...      change config fields and send CONFIG (e.g. set invert=0,1,0,1 min_duty=20); `help set` lists fields
   tel [on|off]     print TELEMETRY
   raw-log          print every received frame
   reboot           REBOOT
   quit | q         STOP and exit
+"""
+
+SET_HELP = """\
+set K=V ...  — run `cfg` first; changed fields are sent in one CONFIG, then re-read.
+Lists are 4 comma-separated values, no spaces, per wheel FL,FR,RL,RR (PROTOCOL.md §4.4).
+An invalid value rejects the whole CONFIG (ACK ERR) and nothing is saved.
+  map=0,1,2,3        physical channel M1..M4 (0..3) driving each wheel; a permutation
+  invert=0,0,0,0     1 = reverse that wheel's direction (applied before map)
+  trim=100,...       per-wheel speed scale, 50..100 %
+  max_duty=100       max PWM, 1..100 % (also limits `raw`)
+  min_duty=15        PWM where a turning wheel starts, 0..max_duty-1 %
+  slew_ms=250        ramp 0→100 % in ms, 0..2000 (stops are always instant)
+  brake=1            1 = brake on STOP/failsafe, 0 = coast
+  failsafe_ms=300    stop after this long without DRIVE/MOTOR_RAW, 100..1000 ms
+  pwm_hz=20000       PWM frequency, 1000..30000 Hz
+  version=1          structure version, must stay 1
+`raw` bypasses map, invert, trim and min_duty; `d`, f/b/l/r and cw/ccw go through all of them.
+Saved in NVS: survives reboot.
 """
 
 
@@ -192,7 +210,7 @@ class Console:
         c, rest = args[0].lower(), args[1:]
         moves = {"f": (0, 1, 0), "b": (0, -1, 0), "l": (-1, 0, 0), "r": (1, 0, 0), "cw": (0, 0, 1), "ccw": (0, 0, -1)}
         if c in ("help", "h", "?"):
-            print(HELP.format(limit=self.limit))
+            print(SET_HELP if rest[:1] == ["set"] else HELP.format(limit=self.limit))
         elif c == "d":
             self.cmd = tuple(clamp(float(v)) for v in (rest + ["0", "0", "0"])[:3])
             self.mode = "drive"
@@ -242,9 +260,17 @@ class Console:
         for p in pairs:
             k, _, v = p.partition("=")
             if k not in new:
-                print(f"unknown field {k!r}; fields: {', '.join(new)}")
+                print(f"unknown field {k!r}; fields: {', '.join(new)} (`help set`)")
                 return
-            new[k] = [int(x) for x in v.split(",")] if isinstance(new[k], list) else int(v)
+            try:
+                val = [int(x) for x in v.split(",")] if isinstance(new[k], list) else int(v)
+            except ValueError:
+                print(f"bad value {v!r} for {k}; `help set`")
+                return
+            if isinstance(val, list) and len(val) != 4:
+                print(f"{k} needs 4 values FL,FR,RL,RR, got {len(val)}")
+                return
+            new[k] = val
         self.send("CONFIG", new)
         self.send("GET_CONFIG")
 
