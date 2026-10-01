@@ -9,6 +9,21 @@ import com.mecanumbot.core.protocol.TelemetryFlags
 
 enum class Phase { DISCONNECTED, HANDSHAKING, VERSION_MISMATCH, READY }
 
+/** Outcome of the last [RobotSession.sendConfig]. */
+sealed interface ConfigWrite {
+    data object Idle : ConfigWrite
+    data object Pending : ConfigWrite
+
+    /** ACK OK: applied and stored in NVS; the session re-reads CONFIG_DATA. */
+    data object Saved : ConfigWrite
+
+    /** ACK ERR (invalid for the firmware) or BUSY (OTA/Wi-Fi mode): nothing changed. */
+    data class Rejected(val status: Int) : ConfigWrite
+
+    /** No ACK in time, or the link went down while waiting. */
+    data object NoAnswer : ConfigWrite
+}
+
 data class TelemetryState(val telemetry: Telemetry, val receivedAt: Long) {
     val failsafe: Boolean get() = has(TelemetryFlags.FAILSAFE)
     val faultA: Boolean get() = has(TelemetryFlags.FAULT_A)
@@ -35,4 +50,5 @@ data class SessionState(
     val lastEvent: SessionEvent? = null,
     /** Incremented by every stop(); the UI uses it to drop held input so motion needs a new press. */
     val stops: Int = 0,
+    val configWrite: ConfigWrite = ConfigWrite.Idle,
 )

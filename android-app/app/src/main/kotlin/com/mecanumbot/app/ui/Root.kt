@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -39,6 +40,7 @@ import com.mecanumbot.app.AppGraph
 private enum class Section(val label: String, val icon: ImageVector) {
     DRIVE("Drive", Icons.Filled.PlayArrow),
     RAW("Raw", Icons.Filled.Build),
+    CONFIG("Config", Icons.Filled.Edit),
     SETTINGS("Settings", Icons.Filled.Settings),
 }
 
@@ -84,6 +86,7 @@ fun Root(graph: AppGraph) {
                     )
                     when (section) {
                         Section.SETTINGS -> SettingsScreen(graph, current.kind)
+                        Section.CONFIG -> ConfigScreen(current.session, state)
                         else -> TestScreen(current.session, state, graph.inForeground, raw = section == Section.RAW)
                     }
                 }

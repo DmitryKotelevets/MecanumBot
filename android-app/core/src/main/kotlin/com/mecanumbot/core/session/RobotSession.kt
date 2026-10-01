@@ -7,10 +7,14 @@ import com.mecanumbot.core.control.Output
 import com.mecanumbot.core.link.Link
 import com.mecanumbot.core.link.LinkState
 import com.mecanumbot.core.link.Priority
+import com.mecanumbot.core.protocol.Ack
+import com.mecanumbot.core.protocol.AckStatus
+import com.mecanumbot.core.protocol.Config
 import com.mecanumbot.core.protocol.ConfigData
 import com.mecanumbot.core.protocol.Drive
 import com.mecanumbot.core.protocol.Frame
 import com.mecanumbot.core.protocol.FrameCodec
+import com.mecanumbot.core.protocol.FrameType
 import com.mecanumbot.core.protocol.GetConfig
 import com.mecanumbot.core.protocol.Hello
 import com.mecanumbot.core.protocol.HelloAck
@@ -20,6 +24,7 @@ import com.mecanumbot.core.protocol.Payload
 import com.mecanumbot.core.protocol.Ping
 import com.mecanumbot.core.protocol.Pong
 import com.mecanumbot.core.protocol.Protocol
+import com.mecanumbot.core.protocol.SetConfig
 import com.mecanumbot.core.protocol.Stop
 import com.mecanumbot.core.protocol.Telemetry
 import kotlinx.coroutines.CoroutineScope
@@ -62,6 +67,8 @@ class RobotSession(
     private var lastResetCount: Int? = null
     private var motionSent = 0
     private var started = false
+    private var pendingConfigSeq: Int? = null
+    private var configTimeout: Job? = null
 
     fun start() {
         if (started) return
@@ -87,6 +94,31 @@ class RobotSession(
         if (link.state.value == LinkState.Connected) repeat(3) { send(Stop, Priority.STOP) }
     }
 
+    /**
+     * Stops the robot, then sends CONFIG; the outcome arrives in [SessionState.configWrite]. A new
+     * map or invert must never reach the wheels mid-drive. Returns false (nothing sent, robot not
+     * stopped) outside READY or when [Config.isValid] fails.
+     */
+    fun sendConfig(config: Config): Boolean {
+        if (_state.value.phase != Phase.READY || !config.isValid()) return false
+        stop()
+        val configSeq = seq
+        send(SetConfig(config), Priority.OTHER)
+        pendingConfigSeq = configSeq
+        _state.update { it.copy(configWrite = ConfigWrite.Pending) }
+        configTimeout?.cancel()
+        configTimeout = scope.launch {
+            delay(CONFIG_ACK_TIMEOUT_MS)
+            if (pendingConfigSeq == configSeq) finishConfigWrite(ConfigWrite.NoAnswer)
+        }
+        return true
+    }
+
+    /** Re-reads the ESP32 config (GET_CONFIG) in READY. */
+    fun refreshConfig() {
+        if (_state.value.phase == Phase.READY) send(GetConfig, Priority.OTHER)
+    }
+
     private fun send(p: Payload, priority: Priority) {
         link.send(FrameCodec.encode(p, seq), priority)
         seq = (seq + 1) and 0xFF
@@ -106,6 +138,7 @@ class RobotSession(
         phaseJob?.cancel()
         phaseJob = null
         arbiter.stop()
+        if (pendingConfigSeq != null) finishConfigWrite(ConfigWrite.NoAnswer)
         _state.update {
             it.copy(phase = Phase.DISCONNECTED, telemetry = null, rttMs = null, motionSentPerSec = 0, activeSource = null)
         }
@@ -172,7 +205,8 @@ class RobotSession(
             is Pong -> _state.update { it.copy(rttMs = (clock() - p.ts) and 0xFFFFFFFFL) }
             is ConfigData -> _state.update { it.copy(config = p.config) }
             is Log -> report(SessionEvent.EspLog(p.level, p.text))
-            else -> Unit // ACK and the rest are used from stage 4 on
+            is Ack -> onAck(p)
+            else -> Unit
         }
     }
 
@@ -199,6 +233,23 @@ class RobotSession(
         if (_state.value.phase != Phase.READY) enterReady()
     }
 
+    private fun onAck(ack: Ack) {
+        if (ack.reqType != FrameType.CONFIG.code || ack.reqSeq != pendingConfigSeq) return
+        if (ack.status == AckStatus.OK) {
+            finishConfigWrite(ConfigWrite.Saved)
+            send(GetConfig, Priority.OTHER) // show what the ESP32 actually stored
+        } else {
+            finishConfigWrite(ConfigWrite.Rejected(ack.status))
+        }
+    }
+
+    private fun finishConfigWrite(result: ConfigWrite) {
+        pendingConfigSeq = null
+        configTimeout?.cancel()
+        configTimeout = null
+        _state.update { it.copy(configWrite = result) }
+    }
+
     /** ESP32 LOG lines go to [events] only, so they never hide a reboot or mismatch in lastEvent. */
     private fun report(e: SessionEvent) {
         if (e !is SessionEvent.EspLog) _state.update { it.copy(lastEvent = e) }
@@ -207,5 +258,6 @@ class RobotSession(
 
     companion object {
         const val TICK_MS = 25L
+        const val CONFIG_ACK_TIMEOUT_MS = 1_000L
     }
 }

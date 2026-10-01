@@ -7,6 +7,7 @@ import com.mecanumbot.core.protocol.Config
 import com.mecanumbot.core.protocol.FrameCodec
 import com.mecanumbot.core.protocol.Telemetry
 import com.mecanumbot.core.protocol.TelemetryFlags
+import com.mecanumbot.core.session.ConfigWrite
 import com.mecanumbot.core.session.Phase
 import com.mecanumbot.core.session.RobotSession
 import com.mecanumbot.core.session.SessionEvent
@@ -165,5 +166,17 @@ class FakeLinkTest {
         assertTrue(t.faultA)
         assertFalse(t.faultB)
         assertEquals(FakeEsp32.VM_NOMINAL_MV - 500, t.telemetry.vmMv)
+    }
+
+    @Test
+    fun `a saved config is read back and changes the motor output`() = runTest {
+        val link = fakeLink()
+        val s = ready(link)
+        assertTrue(s.sendConfig(Config(invert = listOf(1, 0, 0, 0))))
+        advanceTimeBy(100); runCurrent()
+        assertEquals(ConfigWrite.Saved, s.state.value.configWrite)
+        assertEquals(listOf(1, 0, 0, 0), s.state.value.config!!.invert)
+        driveFor(s, 300)
+        assertEquals(listOf(-127, 127, 127, 127), s.state.value.telemetry!!.telemetry.pwm)
     }
 }
