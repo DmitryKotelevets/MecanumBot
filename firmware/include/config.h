@@ -19,8 +19,8 @@ constexpr uint8_t kMotorPins[4][2] = {
     {22, 23},  // M3, DRV8833 #B channel A
     {10, 11},  // M4, DRV8833 #B channel B
 };
-constexpr uint8_t kPinFaultA = 2;  // nFAULT, active low
-constexpr uint8_t kPinFaultB = 3;
+constexpr uint8_t kPinFaultA = 3;  // nFAULT, active low
+constexpr uint8_t kPinFaultB = 2;
 constexpr uint8_t kPinSleep = 6;  // nSLEEP of both drivers, HIGH = run
 constexpr uint8_t kPinVm = 1;     // VM divider, ADC1
 constexpr uint8_t kPinLed = 8;    // on-board WS2812 on DevKitC-1
