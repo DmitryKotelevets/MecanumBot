@@ -32,6 +32,18 @@ class PilotHub(
     private var ignored = 0
     private var closed = false
 
+    /**
+     * Arming latch for the driver's deadman. The Arbiter latches nothing, so after a STOP the page
+     * didn't send (a watcher, the app, a reboot, a session swap) the still-held deadman's next
+     * `en:true` would drive again before the page sees `stops` rise. A held deadman must not
+     * survive a STOP it didn't send: any new STOP, session or loss of READY disarms; `en:false`,
+     * becoming driver or a ≥ [REARM_GAP_MS] pause in `en:true` arms again.
+     */
+    private var armed = false
+    private var seenSession: RobotSession? = null
+    private var seenStops = 0
+    private var lastEnAt: Long? = null
+
     private val _summary = MutableStateFlow(Summary(false, 0, 0))
     val summary: StateFlow<Summary> = _summary.asStateFlow()
 
@@ -43,6 +55,7 @@ class PilotHub(
      */
     fun close() {
         closed = true
+        armed = false
         sessions.value?.update(Command(0f, 0f, 0f, false, Source.REMOTE))
         connections.clear()
         lastStatus.clear()
@@ -52,6 +65,7 @@ class PilotHub(
     fun connect(c: Connection) {
         if (closed) return
         connections += c
+        if (c == driver) arm()
         refresh()
     }
 
@@ -60,7 +74,10 @@ class PilotHub(
         connections.remove(c)
         lastStatus.remove(c)
         // Don't wait for the arbiter's 300 ms expiry.
-        if (wasDriver) sessions.value?.update(Command(0f, 0f, 0f, false, Source.REMOTE))
+        if (wasDriver) {
+            sessions.value?.update(Command(0f, 0f, 0f, false, Source.REMOTE))
+            if (driver != null) arm() else armed = false
+        }
         refresh()
     }
 
@@ -73,7 +90,12 @@ class PilotHub(
                 refresh()
             }
             is DriveMsg -> if (c == driver) {
-                sessions.value?.update(Command(m.vx.unit(), m.vy.unit(), m.w.unit(), m.en, Source.REMOTE))
+                checkArmed()
+                val now = clock()
+                val last = lastEnAt
+                if (!m.en || last == null || now - last >= REARM_GAP_MS) arm()
+                if (m.en) lastEnAt = now
+                sessions.value?.update(Command(m.vx.unit(), m.vy.unit(), m.w.unit(), m.en && armed, Source.REMOTE))
             }
             StopMsg -> sessions.value?.stop()
             is PingMsg -> c.send(PilotMessages.encode(PongMsg(m.ts)))
@@ -83,6 +105,7 @@ class PilotHub(
     /** 10 Hz from the server: status to whoever's changed, then telemetry to everyone. */
     fun tick() {
         if (closed) return
+        checkArmed()
         refresh()
         val t = PilotMessages.encode(telemetry())
         connections.forEach { it.send(t) }
@@ -123,6 +146,23 @@ class PilotHub(
         )
     }
 
+    private fun arm() {
+        armed = true
+        lastEnAt = null
+        seenSession = sessions.value
+        seenStops = seenSession?.state?.value?.stops ?: 0
+    }
+
+    /** Disarms on a STOP, a session swap or a lost READY since the last look. */
+    private fun checkArmed() {
+        val s = sessions.value
+        val st = s?.state?.value
+        val stops = st?.stops ?: 0
+        if (s !== seenSession || stops != seenStops || st?.phase != Phase.READY) armed = false
+        seenSession = s
+        seenStops = stops
+    }
+
     private fun refresh() {
         connections.forEachIndexed { i, c ->
             val status = StatusMsg(if (i == 0) Role.DRIVER else Role.WATCHER, fw(), appVersion, mode())
@@ -139,4 +179,8 @@ class PilotHub(
     private fun mode(): String = sessions.value?.mode?.name ?: "AUTO"
 
     private fun Float.unit(): Float = coerceIn(-1f, 1f)
+
+    private companion object {
+        const val REARM_GAP_MS = 300L
+    }
 }

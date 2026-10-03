@@ -180,6 +180,93 @@ class PilotHubTest {
         assertEquals(Source.REMOTE, s2.state.value.activeSource)
     }
 
+    /** The page's held deadman: `en:true` every 25 ms for [ms]. */
+    private fun TestScope.hold(hub: PilotHub, c: Client, ms: Long) {
+        repeat((ms / 25).toInt()) {
+            hub.onText(c, drive(0.5f))
+            advanceTimeBy(25); runCurrent()
+        }
+    }
+
+    private fun TestScope.assertStopped(s: RobotSession, link: FakeLink) {
+        assertNull(s.state.value.activeSource)
+        assertEquals(listOf(0, 0, 0, 0), link.esp.pwm(testScheduler.currentTime))
+    }
+
+    @Test
+    fun `a held deadman does not re-drive after a watcher's stop until released`() = runTest {
+        val (s, link) = readySession()
+        val hub = hub(s)
+        val a = Client().also(hub::connect)
+        val b = Client().also(hub::connect)
+        hold(hub, a, 100)
+        assertEquals(Source.REMOTE, s.state.value.activeSource)
+        hub.onText(b, """{"t":"stop"}""")
+        hold(hub, a, 500)
+        assertStopped(s, link)
+        hub.onText(a, drive(0.5f, en = false))
+        hold(hub, a, 50)
+        assertEquals(Source.REMOTE, s.state.value.activeSource)
+    }
+
+    @Test
+    fun `a held deadman does not re-drive after the app's stop until released`() = runTest {
+        val (s, link) = readySession()
+        val hub = hub(s)
+        val a = Client().also(hub::connect)
+        hold(hub, a, 100)
+        assertEquals(Source.REMOTE, s.state.value.activeSource)
+        s.stop()
+        hold(hub, a, 500)
+        assertStopped(s, link)
+        hub.onText(a, drive(0.5f, en = false))
+        hold(hub, a, 50)
+        assertEquals(Source.REMOTE, s.state.value.activeSource)
+    }
+
+    @Test
+    fun `a held deadman does not drive a new session until released`() = runTest {
+        val (s1, _) = readySession()
+        val (s2, link2) = readySession()
+        val sessions = MutableStateFlow<RobotSession?>(s1)
+        val hub = PilotHub(sessions, FakeVideo(), { testScheduler.currentTime }, "0.1")
+        val a = Client().also(hub::connect)
+        hold(hub, a, 100)
+        assertEquals(Source.REMOTE, s1.state.value.activeSource)
+        sessions.value = s2
+        hold(hub, a, 500)
+        assertStopped(s2, link2)
+        hub.onText(a, drive(0.5f, en = false))
+        hold(hub, a, 50)
+        assertEquals(Source.REMOTE, s2.state.value.activeSource)
+    }
+
+    @Test
+    fun `a stop while nothing is held does not block the next press`() = runTest {
+        val (s, _) = readySession()
+        val hub = hub(s)
+        val a = Client().also(hub::connect)
+        hold(hub, a, 100)
+        advanceTimeBy(50); runCurrent() // the page went quiet, no en:false
+        s.stop()
+        advanceTimeBy(300); runCurrent()
+        hold(hub, a, 50)
+        assertEquals(Source.REMOTE, s.state.value.activeSource)
+    }
+
+    @Test
+    fun `a promoted watcher's first press drives`() = runTest {
+        val (s, _) = readySession()
+        val hub = hub(s)
+        val a = Client().also(hub::connect)
+        val b = Client().also(hub::connect)
+        hold(hub, a, 100)
+        s.stop()
+        hub.disconnect(a)
+        hold(hub, b, 50)
+        assertEquals(Source.REMOTE, s.state.value.activeSource)
+    }
+
     @Test
     fun `telemetry before any session is all nulls`() = runTest {
         val video = FakeVideo().apply { tempC.value = null; level.value = VideoLevel.OFF }
