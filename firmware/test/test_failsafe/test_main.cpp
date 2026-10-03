@@ -66,6 +66,15 @@ void test_feed_across_overflow() {
   TEST_ASSERT_TRUE(fs.tick(0x00000010u + 300));
 }
 
+void test_feed_after_tick_time() {
+  // loop() caches now; a frame handled in the same pass may be stamped 1 ms later.
+  Failsafe fs(1000);
+  fs.feed(5001);
+  TEST_ASSERT_FALSE(fs.tick(5000));
+  TEST_ASSERT_FALSE(fs.active());
+  TEST_ASSERT_TRUE(fs.tick(6001));
+}
+
 void test_set_timeout() {
   Failsafe fs(300);
   fs.setTimeout(100);
@@ -83,6 +92,7 @@ int main() {
   RUN_TEST(test_recovers_after_expiry);
   RUN_TEST(test_millis_overflow);
   RUN_TEST(test_feed_across_overflow);
+  RUN_TEST(test_feed_after_tick_time);
   RUN_TEST(test_set_timeout);
   return UNITY_END();
 }

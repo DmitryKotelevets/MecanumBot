@@ -16,8 +16,11 @@ class Failsafe {
   }
 
   // Returns true exactly once, on the tick that enters failsafe.
+  // A feed() stamped later than now_ms (fresh millis() vs the loop's cached one)
+  // counts as zero elapsed, not as a wrapped ~49-day gap.
   bool tick(uint32_t now_ms) {
-    if (active_ || static_cast<uint32_t>(now_ms - last_) < timeout_) return false;
+    const int32_t elapsed = static_cast<int32_t>(now_ms - last_);
+    if (active_ || elapsed < static_cast<int32_t>(timeout_)) return false;
     active_ = true;
     return true;
   }
