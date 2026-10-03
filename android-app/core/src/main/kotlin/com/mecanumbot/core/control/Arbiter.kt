@@ -42,6 +42,14 @@ class Arbiter(private val timeoutMs: Long = 300) {
         raw = null
     }
 
+    /** Forgets [source]'s command at once, without waiting for it to expire. */
+    fun release(source: Source) {
+        commands.remove(source)
+    }
+
+    /** True while a RAW value is fresh, i.e. the next [tick] sends MOTOR_RAW. */
+    fun rawActive(now: Long): Boolean = raw?.let { now - it.at < timeoutMs } ?: false
+
     fun activeSource(now: Long): Source? = Source.entries.firstOrNull { s ->
         val c = commands[s]
         allowed(s) && c != null && now - c.at < timeoutMs && c.value.enable

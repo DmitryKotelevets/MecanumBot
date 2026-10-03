@@ -4,6 +4,7 @@ import com.mecanumbot.core.control.Arbiter
 import com.mecanumbot.core.control.Command
 import com.mecanumbot.core.control.Mode
 import com.mecanumbot.core.control.Output
+import com.mecanumbot.core.control.Source
 import com.mecanumbot.core.link.Link
 import com.mecanumbot.core.link.LinkState
 import com.mecanumbot.core.link.Priority
@@ -87,11 +88,28 @@ class RobotSession(
     fun clearRaw() = arbiter.clearRaw()
     fun setMode(mode: Mode) = arbiter.setMode(mode)
 
+    val mode: Mode get() = arbiter.mode
+
     /** Clears every command and sends STOP ×3 at once, in any phase while the link is up. */
     fun stop() {
         arbiter.stop()
         _state.update { it.copy(stops = it.stops + 1) }
         if (link.state.value == LinkState.Connected) repeat(3) { send(Stop, Priority.STOP) }
+    }
+
+    /**
+     * The robot's own UI went away (Activity paused, Test screen left). If TEST or RAW is driving,
+     * that is a stop (STOP ×3, everything cleared). Otherwise TEST and RAW are dropped quietly and
+     * a remote pilot keeps driving (stage 5 spec §4.3).
+     */
+    fun releaseLocal() {
+        val now = clock()
+        if (arbiter.rawActive(now) || arbiter.activeSource(now) == Source.TEST) {
+            stop()
+        } else {
+            arbiter.release(Source.TEST)
+            arbiter.clearRaw()
+        }
     }
 
     /**

@@ -1,7 +1,9 @@
 package com.mecanumbot.core.control
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class ArbiterTest {
@@ -101,5 +103,25 @@ class ArbiterTest {
         a.stop()
         assertEquals(pulse, a.tick(1))
         assertNull(a.activeSource(1))
+    }
+
+    @Test
+    fun `release forgets one source at once and leaves the others`() {
+        val a = Arbiter()
+        a.update(cmd(Source.TEST), 0)
+        a.update(cmd(Source.REMOTE), 0)
+        a.release(Source.TEST)
+        assertEquals(Source.REMOTE, a.activeSource(1))
+        a.release(Source.REMOTE)
+        assertNull(a.activeSource(1))
+    }
+
+    @Test
+    fun `rawActive follows the RAW expiry`() {
+        val a = Arbiter()
+        assertFalse(a.rawActive(0))
+        a.setRaw(listOf(1, 2, 3, 4), 1000)
+        assertTrue(a.rawActive(1299))
+        assertFalse(a.rawActive(1300))
     }
 }
