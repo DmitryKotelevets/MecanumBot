@@ -87,11 +87,18 @@ class RobotService : LifecycleService() {
         val s = PilotServer(hub, video, ::asset, Dispatchers.Main.immediate)
         server = s
         lifecycleScope.launch(Dispatchers.IO) {
-            val error = try {
-                s.start()
-                null
-            } catch (e: IOException) { // port 8080 busy, no network …
-                "server: ${e.message}"
+            // A restart can find the old socket still holding 8080 for a moment: retry. Destroying
+            // the service cancels this coroutine, and a stopped server's start() does nothing.
+            var error: String? = null
+            for (attempt in 0..START_RETRIES) {
+                if (attempt > 0) delay(START_RETRY_MS)
+                error = try {
+                    s.start()
+                    null
+                } catch (e: IOException) { // port 8080 busy, no network …
+                    "server: ${e.message}"
+                }
+                if (error == null || server !== s) break
             }
             if (lifecycle.currentState != Lifecycle.State.DESTROYED) graph.pilot.update { it.copy(error = error) } // update{}: the Main collector below writes too
         }
@@ -195,5 +202,7 @@ class RobotService : LifecycleService() {
         private const val CHANNEL = "pilot"
         private const val NOTIFICATION_ID = 1
         private const val TEMP_PERIOD_MS = 5_000L
+        private const val START_RETRIES = 5
+        private const val START_RETRY_MS = 500L
     }
 }

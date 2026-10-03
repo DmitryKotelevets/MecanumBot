@@ -20,9 +20,14 @@ import io.ktor.server.websocket.pingPeriod
 import io.ktor.server.websocket.timeout
 import io.ktor.server.websocket.webSocket
 import io.ktor.utils.io.writeFully
+import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
+import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
@@ -34,12 +39,14 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.IOException
 import kotlin.time.Duration.Companion.seconds
 
 /**
  * The pilot's HTTP server (spec §6): Ktor CIO on 0.0.0.0:[port]. [assets] maps a file name under
  * assets/pilot/ to its bytes (null = missing). Every PilotHub call is made on [hubDispatcher].
  * Single use: once stopped it never starts again. start/stop may be called from any thread.
+ * [start] throws an IOException if the port can't be bound and may then be called again.
  */
 class PilotServer(
     private val hub: PilotHub,
@@ -51,12 +58,21 @@ class PilotServer(
     private var engine: EmbeddedServer<*, *>? = null
     private var stopped = false
 
+    @OptIn(DelicateCoroutinesApi::class) // what the scope-less embeddedServer() uses anyway
     @Synchronized
     fun start() {
         if (stopped || engine != null) return
-        engine = embeddedServer(CIO, port = port, host = "0.0.0.0") {
+        val e = GlobalScope.embeddedServer(CIO, port = port, host = "0.0.0.0", parentCoroutineContext = BIND_FAILURE) {
             pilotModule(hub, video, assets, hubDispatcher)
-        }.start(wait = false)
+        }
+        try {
+            e.start(wait = false) // CIO waits for the bind and throws if it fails
+        } catch (t: Throwable) {
+            e.stop(gracePeriodMillis = 0, timeoutMillis = 200)
+            // CIO wraps the BindException in a JobCancellationException.
+            throw generateSequence(t) { it.cause }.filterIsInstance<IOException>().firstOrNull() ?: t
+        }
+        engine = e
     }
 
     @Synchronized
@@ -68,6 +84,14 @@ class PilotServer(
 
     companion object {
         const val PORT = 8080
+
+        /**
+         * CIO's server job also reports a failed bind as an uncaught exception (on Android, a
+         * crash); start() rethrows it, so drop it here. Anything else stays uncaught.
+         */
+        private val BIND_FAILURE = CoroutineExceptionHandler { _, e ->
+            if (e !is IOException) Thread.currentThread().let { it.uncaughtExceptionHandler?.uncaughtException(it, e) }
+        }
     }
 }
 
@@ -80,6 +104,7 @@ fun Application.pilotModule(
     install(WebSockets) {
         pingPeriod = 2.seconds // a vanished laptop stops being the driver within ~4–6 s
         timeout = 4.seconds
+        maxFrameSize = 4096
     }
     launch(hubDispatcher) {
         while (isActive) {
@@ -121,11 +146,17 @@ fun Application.pilotModule(
             call.respondText(PilotJson.encodeToString(ApiStatus.serializer(), status), ContentType.Application.Json)
         }
         webSocket("/ws") {
+            // Another site open in the same browser must not drive (no Origin: not a browser).
+            val origin = call.request.headers[HttpHeaders.Origin]
+            if (origin != null && origin.substringAfter("://") != call.request.headers[HttpHeaders.Host]) {
+                close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "origin"))
+                return@webSocket
+            }
             val out = Channel<String>(64, BufferOverflow.DROP_OLDEST)
             val conn = PilotHub.Connection { out.trySend(it) }
-            withContext(hubDispatcher) { hub.connect(conn) }
             val writer = launch { for (text in out) send(Frame.Text(text)) }
             try {
+                withContext(hubDispatcher) { hub.connect(conn) }
                 for (frame in incoming) {
                     if (frame is Frame.Text) {
                         val text = frame.readText()

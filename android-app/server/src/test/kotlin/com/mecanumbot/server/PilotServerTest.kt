@@ -7,13 +7,16 @@ import com.mecanumbot.fake.FakeLink
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsBytes
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
+import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
 import kotlinx.coroutines.CoroutineScope
@@ -32,6 +35,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.io.IOException
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.Executors
@@ -93,6 +97,45 @@ class PilotServerTest {
         }
         // Driver socket closed: REMOTE is released without waiting for expiry.
         withTimeout(250) { session.state.first { it.activeSource == null } }
+    }
+
+    @Test
+    fun `ws from a foreign origin is closed before it joins`() = testApplication {
+        val hub = pilot(readySession())
+        val client = createClient { install(WebSockets) }
+        client.webSocket("/ws", request = { header(HttpHeaders.Host, "localhost"); header(HttpHeaders.Origin, "http://evil.example") }) {
+            val texts = mutableListOf<String>()
+            for (frame in incoming) if (frame is Frame.Text) texts += frame.readText()
+            assertEquals(emptyList<String>(), texts)
+            assertEquals(CloseReason.Codes.VIOLATED_POLICY.code, closeReason.await()?.code)
+        }
+        assertEquals(PilotHub.Summary(false, 0, 0), withContext(main) { hub.summary.value })
+    }
+
+    @Test
+    fun `ws from the page's own origin works`() = testApplication {
+        pilot(readySession())
+        val client = createClient { install(WebSockets) }
+        // The in-memory test client sends no Host of its own, so set the one a browser would.
+        client.webSocket("/ws", request = { header(HttpHeaders.Host, "localhost"); header(HttpHeaders.Origin, "http://localhost") }) {
+            val first = (incoming.receive() as Frame.Text).readText()
+            assertTrue(first.contains(""""role":"driver""""), first)
+        }
+    }
+
+    @Test
+    fun `start on a busy port throws and can be retried`() {
+        val hub = PilotHub(MutableStateFlow(null), video, clock, "0.1")
+        val busy = ServerSocket(0)
+        val port = busy.localPort
+        val server = PilotServer(hub, video, files::get, main, port)
+        try {
+            busy.use { assertThrows(IOException::class.java) { server.start() } }
+            server.start() // the port is free now
+            Socket("127.0.0.1", port).close()
+        } finally {
+            server.stop()
+        }
     }
 
     @Test
