@@ -277,6 +277,17 @@ class PilotHubTest {
     }
 
     @Test
+    fun `telemetry carries the phone battery once it is known`() = runTest {
+        val battery = MutableStateFlow<PhoneBattery?>(null)
+        val hub = PilotHub(MutableStateFlow(null), FakeVideo(), { testScheduler.currentTime }, "0.1", battery)
+        assertNull(hub.telemetry().batteryPct)
+        assertNull(hub.telemetry().charging)
+        battery.value = PhoneBattery(percent = 76, charging = true)
+        assertEquals(76, hub.telemetry().batteryPct)
+        assertEquals(true, hub.telemetry().charging)
+    }
+
+    @Test
     fun `telemetry carries session, video age and temperature`() = runTest {
         val (s, _) = readySession()
         val video = FakeVideo()

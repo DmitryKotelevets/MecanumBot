@@ -25,3 +25,6 @@ until it is released. Keys pressed with Cmd, Ctrl or Alt are ignored.
 
 While the phone shows the Test screen's Raw tab, remote driving is blocked (bench mode), and pressing Home there stops
 the robot.
+
+The top bar shows the robot phone's battery (⚡ while charging); below 20 % and not charging a red banner warns
+the pilot. The phone does not charge while it powers the ESP32 over USB OTG.

@@ -19,6 +19,7 @@ class PilotHub(
     private val video: VideoSource,
     private val clock: () -> Long,
     private val appVersion: String,
+    private val battery: StateFlow<PhoneBattery?> = MutableStateFlow(null),
 ) {
     /** One /ws client. [send] must not block: the server drops old messages for a slow client. */
     fun interface Connection {
@@ -129,6 +130,8 @@ class PilotHub(
             tempC = video.tempC.value,
             video = video.level.value.name.lowercase(),
             videoAgeMs = frame?.let { clock() - it.capturedAt },
+            batteryPct = battery.value?.percent,
+            charging = battery.value?.charging,
         )
     }
 

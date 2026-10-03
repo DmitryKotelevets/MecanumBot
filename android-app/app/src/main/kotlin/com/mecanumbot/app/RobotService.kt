@@ -17,10 +17,12 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.mecanumbot.camera.MjpegCamera
+import com.mecanumbot.server.PhoneBattery
 import com.mecanumbot.server.PilotHub
 import com.mecanumbot.server.PilotServer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -39,6 +41,7 @@ class RobotService : LifecycleService() {
     private var server: PilotServer? = null
     private var hub: PilotHub? = null
     private var camera: MjpegCamera? = null
+    private val phoneBattery = MutableStateFlow<PhoneBattery?>(null)
     private lateinit var wifi: WifiAddress
     private lateinit var wakeLock: PowerManager.WakeLock
     private lateinit var wifiLock: WifiManager.WifiLock
@@ -82,7 +85,7 @@ class RobotService : LifecycleService() {
         val cam = if (cameraAllowed) MjpegCamera(this, this, lifecycleScope, graph.clock) else null
         camera = cam
         val video = CameraVideo(cam, lifecycleScope)
-        val hub = PilotHub(graph.sessions, video, graph.clock, "${AppGraph.APP_MAJOR}.${AppGraph.APP_MINOR}")
+        val hub = PilotHub(graph.sessions, video, graph.clock, "${AppGraph.APP_MAJOR}.${AppGraph.APP_MINOR}", phoneBattery)
         this.hub = hub
         val s = PilotServer(hub, video, ::asset, Dispatchers.Main.immediate)
         server = s
@@ -107,8 +110,10 @@ class RobotService : LifecycleService() {
         }
         lifecycleScope.launch {
             while (true) {
-                batteryTempC()?.let(video::onTemperature)
-                delay(TEMP_PERIOD_MS)
+                val battery = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+                battery?.let(::tempC)?.let(video::onTemperature)
+                phoneBattery.value = battery?.let(::readBattery)
+                delay(BATTERY_PERIOD_MS)
             }
         }
         lifecycleScope.launch {
@@ -190,10 +195,18 @@ class RobotService : LifecycleService() {
         null
     }
 
-    private fun batteryTempC(): Float? {
-        val battery = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return null
+    private fun tempC(battery: Intent): Float? {
         val tenths = battery.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE)
         return if (tenths == Int.MIN_VALUE) null else tenths / 10f
+    }
+
+    private fun readBattery(battery: Intent): PhoneBattery? {
+        val level = battery.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+        val scale = battery.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+        if (level < 0 || scale <= 0) return null
+        val status = battery.getIntExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_UNKNOWN)
+        val charging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
+        return PhoneBattery(level * 100 / scale, charging)
     }
 
     companion object {
@@ -201,7 +214,7 @@ class RobotService : LifecycleService() {
         private const val TAG = "RobotService"
         private const val CHANNEL = "pilot"
         private const val NOTIFICATION_ID = 1
-        private const val TEMP_PERIOD_MS = 5_000L
+        private const val BATTERY_PERIOD_MS = 5_000L
         private const val START_RETRIES = 5
         private const val START_RETRY_MS = 500L
     }

@@ -2,6 +2,7 @@ package com.mecanumbot.server
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class PilotMessagesTest {
@@ -40,9 +41,14 @@ class PilotMessagesTest {
             PilotMessages.encode(StatusMsg(Role.DRIVER, "0.1", "0.1", "AUTO")),
         )
         assertEquals("""{"t":"pong","ts":5}""", PilotMessages.encode(PongMsg(5)))
+        assertTrue(
+            PilotMessages.encode(
+                TelemetryMsg(null, null, null, null, false, "READY", null, null, null, 0, null, "normal", null, batteryPct = 76, charging = true),
+            ).endsWith(""""battery_pct":76,"charging":true}"""),
+        )
         assertEquals(
             """{"t":"telemetry","vm":null,"pwm":null,"failsafe":null,"fault":null,"usb":false,"phase":"DISCONNECTED",""" +
-                """"active":null,"rtt_ms":null,"rx_fps":null,"stops":0,"temp_c":null,"video":"off","video_age_ms":null}""",
+                """"active":null,"rtt_ms":null,"rx_fps":null,"stops":0,"temp_c":null,"video":"off","video_age_ms":null,"battery_pct":null,"charging":null}""",
             PilotMessages.encode(TelemetryMsg(null, null, null, null, false, "DISCONNECTED", null, null, null, 0, null, "off", null)),
         )
     }

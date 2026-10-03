@@ -41,7 +41,7 @@ enum class Role {
 @SerialName("status")
 data class StatusMsg(val role: Role, val fw: String?, val app: String, val mode: String) : Outbound
 
-/** Nullable fields are null until the first TELEMETRY frame (or the first video frame). */
+/** Nullable fields are null until the first TELEMETRY frame (or the first video frame / battery reading). */
 @Serializable
 @SerialName("telemetry")
 data class TelemetryMsg(
@@ -58,6 +58,8 @@ data class TelemetryMsg(
     @SerialName("temp_c") val tempC: Float?,
     val video: String,
     @SerialName("video_age_ms") val videoAgeMs: Long?,
+    @SerialName("battery_pct") val batteryPct: Int? = null,
+    val charging: Boolean? = null,
 ) : Outbound
 
 @Serializable

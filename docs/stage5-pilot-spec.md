@@ -72,7 +72,8 @@ pilot → robot  {"t":"drive","vx":0.0,"vy":0.5,"w":0.0,"en":true}   40 Hz while
 robot → pilot  {"t":"status","role":"driver"|"watcher","fw":"0.1","app":"0.1","mode":"AUTO"}
                {"t":"telemetry","vm":3.58,"pwm":[40,40,40,40],"failsafe":false,"fault":false,
                 "usb":true,"phase":"READY","active":"REMOTE","rtt_ms":4,"rx_fps":40,
-                "stops":0,"temp_c":31.5,"video":"normal","video_age_ms":60}
+                "stops":0,"temp_c":31.5,"video":"normal","video_age_ms":60,
+                "battery_pct":76,"charging":false}
                {"t":"pong","ts":1234}
 ```
 
@@ -80,6 +81,7 @@ robot → pilot  {"t":"status","role":"driver"|"watcher","fw":"0.1","app":"0.1",
 - `status` is sent on connect and whenever the role, the arbiter mode, or the firmware version changes. `fw` is `null` before HELLO_ACK.
 - `telemetry` is sent at 10 Hz to every connection. `vm`, `pwm`, `failsafe`, `fault`, `rx_fps` are `null` before the first TELEMETRY frame. `usb` is "link Connected"; `phase` is `SessionState.phase`; `active` is `SessionState.activeSource` or `null`; `stops` is `SessionState.stops`.
 - `video_age_ms` is the time since the latest JPEG was produced, or `null` when there is none.
+- `battery_pct` (0–100) and `charging` are the robot phone's battery, read every 5 s with the temperature; `null` until the first reading. The page warns below 20 % when not charging (DESIGN §5.4).
 - Unknown `t`, malformed JSON, or wrong field types: the message is ignored and a counter (`/api/status`) is incremented. The connection is never closed for that.
 
 ### 4.2 PilotHub

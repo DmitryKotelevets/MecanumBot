@@ -10,6 +10,7 @@ const RTT_LAG_MS = 200;          // red border
 const VIDEO_LAG_MS = 1000;       // red border
 const VIDEO_STALE_MS = 3000;     // reload <img>
 const DEFAULT_LIMIT = 30;        // %; reset on every page load
+const BATTERY_LOW_PCT = 20;      // DESIGN.md §5.4: warn below 20 %
 
 const state = {
   ws: null,
@@ -239,6 +240,7 @@ function render() {
   text('vm', t && t.vm !== null ? `${t.vm.toFixed(2)} V` : '—');
   text('active', t && t.active ? t.active : '—');
   text('temp', t && t.temp_c !== null ? `${t.temp_c.toFixed(1)} °C` : '—');
+  text('battery', t && t.battery_pct != null ? `${t.battery_pct} %${t.charging ? ' ⚡' : ''}` : '—');
   text('video', t ? t.video : '—');
   text('limit-value', `${Math.round(state.limit * 100)} %`);
   hold.classList.toggle('on', state.deadman);
@@ -260,6 +262,9 @@ function renderBanners(t) {
       if (t.phase !== 'READY') list.push([`Robot not ready: ${t.phase}`, true]);
       if (t.failsafe) list.push(['FAILSAFE — motors stopped', true]);
       if (t.fault) list.push(['Motor driver FAULT', true]);
+      if (t.battery_pct != null && t.battery_pct < BATTERY_LOW_PCT && !t.charging) {
+        list.push([`Phone battery low: ${t.battery_pct} %`, true]);
+      }
       const temp = t.temp_c === null ? '' : ` — phone at ${t.temp_c.toFixed(1)} °C`;
       if (t.video === 'reduced') list.push([`Video reduced${temp}`, false]);
       if (t.video === 'off') list.push([`Video off${temp}`, true]);
