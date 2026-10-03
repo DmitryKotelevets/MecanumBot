@@ -38,7 +38,7 @@
 These are situations the spec implies but none of its explicit requirements test directly. Each one is pinned by a test or a manual check in the task named at the end of its line.
 1. **The operator switches tabs on the phone while a remote pilot drives.** Today `TestScreen` calls `session.stop()` in `onDispose`, which would STOP ×3 the pilot. Leaving the Test screen must stop only TEST/RAW driving. Pinned by `RobotSessionReleaseTest` (Task 1), the `TestScreen` change (Task 7) and manual check 6 in Task 9.
 2. **A `/stream` client vanishes (tab closed, laptop asleep).** Its viewer slot must be released, or the camera runs (and heats) for nobody. Ktor notices a gone client on the next write. Pinned by `PilotServerTest` "releases the viewer once the client is gone" (Task 4) and manual check 11 in Task 9. While video is OFF nothing is written, so the slot is released only after video resumes; that is harmless and documented in the code.
-3. **The camera can't start as a camera service** (CAMERA denied, or Android refuses a camera FGS because the app isn't visible). The service must fall back to `connectedDevice` and keep driving, not crash. Pinned by the `startForegroundSafely` fallback (Task 7) and manual check 10 in Task 9.
+3. **The camera can't start as a camera service** (CAMERA denied, or Android refuses a camera FGS because the app isn't visible). The service must fall back to `connectedDevice` and keep driving, not crash. Pinned by the `startForegroundSafely` fallback (Task 7) and manual check 10 in Task 9. Symptom to recognise: the camera type is decided once per service lifetime, so if the first start is refused for a transient reason (the app not yet in front when the permission dialog closes), video stays `off` until notification Stop and reopen.
 4. **A watcher is promoted to driver while its Shift key is held.** It must not start driving without a new press. Pinned server-side by the promotion test (Task 3), page-side by `releaseDeadman()` on every role change (Task 6), and by manual check 5 in Task 9.
 5. **Hostile or broken input on `/ws` and static paths** (`NaN`, missing fields, unknown `t`, `/..%2F`, dot-files, nested paths). It is ignored or answered 404 and never crashes or drives. Pinned by `PilotMessagesTest` (Task 2), `PilotHubTest` "garbage is counted" (Task 3) and the static-file test (Task 4).
 
@@ -2664,6 +2664,7 @@ import com.mecanumbot.server.PilotServer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.IOException
 
@@ -2731,7 +2732,7 @@ class RobotService : LifecycleService() {
             } catch (e: IOException) { // port 8080 busy, no network …
                 "server: ${e.message}"
             }
-            graph.pilot.value = graph.pilot.value.copy(error = error)
+            graph.pilot.update { it.copy(error = error) } // update{}: the Main collector below writes too
         }
         if (cam != null) {
             lifecycleScope.launch { graph.cameraPreference.options.collect { cam.setOptions(it.lens, it.rotation) } }
@@ -2744,7 +2745,7 @@ class RobotService : LifecycleService() {
         }
         lifecycleScope.launch {
             combine(wifi.address, hub.summary, video.level, video.tempC) { ip, summary, level, temp ->
-                graph.pilot.value.copy(
+                PilotInfo(
                     running = true,
                     url = ip?.let { "http://$it:${PilotServer.PORT}" },
                     driverConnected = summary.driverConnected,
@@ -2752,10 +2753,10 @@ class RobotService : LifecycleService() {
                     video = level,
                     tempC = temp,
                 )
-            }.collect { info ->
-                val urlChanged = info.url != graph.pilot.value.url
-                graph.pilot.value = info
-                if (urlChanged) getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(info.url))
+            }.collect { live ->
+                val urlChanged = live.url != graph.pilot.value.url
+                graph.pilot.update { live.copy(error = it.error) }
+                if (urlChanged) getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(live.url))
             }
         }
     }
@@ -3441,7 +3442,7 @@ Install the APK, open the app, grant Camera and Notifications, and pick Settings
 6. On the phone, switch from Drive to Settings to Config and back while the browser drives: the drive is not interrupted (Review Focus 1). Then hold "Hold to drive" on the phone and press Home: STOP ×3, and the pilot's deadman is released.
 7. Turn the phone screen off while driving from the browser: driving and video continue.
 8. Throttle the Mac's Wi-Fi (or walk away from the router): the red border appears when RTT > 200 ms or the video is older than 1 s.
-9. Notification Stop: the robot stops, the page shows Disconnected, and the status bar says "Pilot server off". Opening the app starts the service again.
+9. Notification Stop: the robot stops, the page shows Disconnected, and the status bar says "Pilot server off". Opening the app starts the service again. Reopen within a second of Stop as well: the old server may still hold port 8080 for up to 1 s. Expected: the status bar shows `Pilot server: …` (bind error), not a crash. Whether CIO reports the bind failure synchronously (caught) has not been verified; if the app crashes here, that is the cause, and the fix is to wait for the previous `stop()` before `start()`.
 10. Deny Camera (Android Settings → Apps → MecanumBot → Permissions), reopen the app: the pilot still drives and `video` is `off` (Review Focus 3).
 11. Close the tab and wait 10 s with the screen on: the camera turns off (no recent-camera-use green dot) once no one is watching (Review Focus 2).
 
