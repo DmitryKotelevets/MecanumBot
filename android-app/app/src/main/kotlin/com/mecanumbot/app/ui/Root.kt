@@ -50,6 +50,7 @@ fun Root(graph: AppGraph) {
     val current = active ?: return
     key(current.session) {
         val state by current.session.state.collectAsStateWithLifecycle()
+        val pilot by graph.pilot.collectAsStateWithLifecycle()
         var section by rememberSaveable { mutableStateOf(Section.DRIVE) }
         // Surface sets the content color (onBackground) for all text; it fills behind the system bars
         // while the content stays clear of bars, cutout and IME.
@@ -81,6 +82,7 @@ fun Root(graph: AppGraph) {
                     StatusBar(
                         kind = current.kind,
                         state = state,
+                        pilot = pilot,
                         clock = graph.clock,
                         onRequestPermission = { graph.usbLink.requestPermission() },
                     )

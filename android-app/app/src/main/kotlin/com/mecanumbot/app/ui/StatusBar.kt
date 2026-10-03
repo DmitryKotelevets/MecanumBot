@@ -26,11 +26,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mecanumbot.app.LinkKind
+import com.mecanumbot.app.PilotInfo
 import com.mecanumbot.core.link.LinkState
 import com.mecanumbot.core.protocol.Protocol
 import com.mecanumbot.core.session.Phase
 import com.mecanumbot.core.session.SessionEvent
 import com.mecanumbot.core.session.SessionState
+import com.mecanumbot.server.VideoLevel
 import com.mecanumbot.usb.UsbLink
 import kotlinx.coroutines.delay
 
@@ -41,6 +43,7 @@ private val Danger = Color(0xFFD32F2F)
 fun StatusBar(
     kind: LinkKind,
     state: SessionState,
+    pilot: PilotInfo,
     clock: () -> Long,
     onRequestPermission: () -> Unit,
 ) {
@@ -72,6 +75,11 @@ fun StatusBar(
             state.lastEvent?.let {
                 Text(it.message(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
             }
+            Text(
+                pilotText(pilot),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (pilot.error != null || pilot.video == VideoLevel.OFF && pilot.running) Danger else Color.Unspecified,
+            )
         }
         state.telemetry?.let { t ->
             if (t.failsafe) Badge("FAILSAFE", Danger)
@@ -121,6 +129,18 @@ private fun detailsText(s: SessionState, now: Long): String = buildString {
     s.rttMs?.let { append("RTT $it ms   ") }
     append("tx ${s.motionSentPerSec}/s")
     s.telemetry?.let { append("   rx ${it.telemetry.rxFrames}/s   age ${now - it.receivedAt} ms") }
+}
+
+private fun pilotText(p: PilotInfo): String {
+    if (!p.running) return "Pilot server off"
+    p.error?.let { return "Pilot $it" }
+    return buildString {
+        append("Pilot ${p.url ?: "— no Wi-Fi"}")
+        append(if (p.driverConnected) "   driver connected" else "   no driver")
+        if (p.watchers > 0) append("   ${p.watchers} watching")
+        p.video?.let { append("   video ${it.name.lowercase()}") }
+        p.tempC?.let { append("   %.1f °C".format(it)) }
+    }
 }
 
 fun SessionEvent.message(): String = when (this) {

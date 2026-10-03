@@ -14,6 +14,8 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -23,8 +25,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.mecanumbot.app.AppGraph
+import com.mecanumbot.app.CameraOptions
+import com.mecanumbot.app.CameraPreference
 import com.mecanumbot.app.LinkKind
+import com.mecanumbot.camera.Lens
 import com.mecanumbot.fake.FaultControls
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 @Composable
@@ -39,7 +45,28 @@ fun SettingsScreen(graph: AppGraph, kind: LinkKind) {
                 FilterChip(selected = k == kind, onClick = { graph.select(k) }, label = { Text(k.name) })
             }
         }
+        CameraPanel(graph.cameraPreference)
         if (kind == LinkKind.FAKE) FaultPanel(graph.fakeLink.faults)
+    }
+}
+
+@Composable
+private fun CameraPanel(preference: CameraPreference) {
+    val options by preference.options.collectAsState(initial = CameraOptions())
+    val scope = rememberCoroutineScope()
+    fun save(o: CameraOptions) {
+        scope.launch { preference.save(o) }
+    }
+
+    Text("Camera (pilot video)", style = MaterialTheme.typography.titleMedium)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(options.lens == Lens.ULTRA_WIDE, onClick = { save(options.copy(lens = Lens.ULTRA_WIDE)) }, label = { Text("Ultra-wide") })
+        FilterChip(options.lens == Lens.MAIN, onClick = { save(options.copy(lens = Lens.MAIN)) }, label = { Text("Main") })
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        CameraPreference.ROTATIONS.forEach { r ->
+            FilterChip(options.rotation == r, onClick = { save(options.copy(rotation = r)) }, label = { Text("$r°") })
+        }
     }
 }
 
