@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.util.Log
 import android.util.Size
 import android.view.Surface
 import androidx.camera.core.CameraSelector
@@ -14,6 +15,7 @@ import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.lifecycle.awaitInstance
 import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.Observer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -43,9 +45,11 @@ class MjpegCamera(
     val frames: StateFlow<CameraFrame?> = _frames.asStateFlow()
 
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val lock = Any()
     private var provider: ProcessCameraProvider? = null
     private var loading = false
     private var analysis: ImageAnalysis? = null
+    private var released = false
 
     private var active = false
     private var level = ThermalLevel.NORMAL
@@ -55,6 +59,7 @@ class MjpegCamera(
     @Volatile private var minIntervalMs = 1_000L / NORMAL_FPS
     @Volatile private var lastEmitAt = Long.MIN_VALUE / 2
     @Volatile private var n = 0L
+    @Volatile private var encodeErrorLogged = false
 
     fun setActive(active: Boolean) {
         if (this.active == active) return
@@ -77,18 +82,25 @@ class MjpegCamera(
     }
 
     fun release() {
+        released = true
         unbind()
         executor.shutdown()
     }
 
     private fun rebind() {
+        if (released) return
         val p = provider
         if (p == null) {
             if (!loading) {
                 loading = true
                 scope.launch {
-                    provider = ProcessCameraProvider.awaitInstance(context)
-                    rebind()
+                    try {
+                        provider = ProcessCameraProvider.awaitInstance(context)
+                        rebind()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to get ProcessCameraProvider", e)
+                        loading = false
+                    }
                 }
             }
             return
@@ -100,6 +112,7 @@ class MjpegCamera(
         val reduced = level == ThermalLevel.REDUCED
         val size = if (reduced) Size(320, 240) else Size(640, 480)
         minIntervalMs = 1_000L / if (reduced) REDUCED_FPS else NORMAL_FPS
+        encodeErrorLogged = false
         val a = ImageAnalysis.Builder()
             .setResolutionSelector(
                 ResolutionSelector.Builder()
@@ -111,37 +124,72 @@ class MjpegCamera(
             .setOutputImageRotationEnabled(true) // CameraX rotates the buffer, so the JPEG is upright
             .setTargetRotation(surfaceRotation(rotationDegrees))
             .build()
-        a.setAnalyzer(executor, ::analyze)
+        a.setAnalyzer(executor) { image -> analyze(a, image) }
+        synchronized(lock) {
+            analysis = a
+        }
         val camera = try {
             p.bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, a)
-        } catch (_: IllegalStateException) {
+        } catch (e: IllegalStateException) {
+            Log.w(TAG, "Failed to bind camera: state error", e)
+            synchronized(lock) {
+                analysis = null
+            }
             return
-        } catch (_: IllegalArgumentException) {
+        } catch (e: IllegalArgumentException) {
+            Log.w(TAG, "Failed to bind camera: argument error", e)
+            synchronized(lock) {
+                analysis = null
+            }
             return
         }
-        analysis = a
         // Pixels expose the ultra-wide through the back logical camera's zoom below 1×.
-        val ratio = if (lens == Lens.ULTRA_WIDE) camera.cameraInfo.zoomState.value?.minZoomRatio ?: 1f else 1f
-        camera.cameraControl.setZoomRatio(ratio)
+        if (lens == Lens.ULTRA_WIDE) {
+            val observer = object : Observer<androidx.camera.core.ZoomState> {
+                override fun onChanged(state: androidx.camera.core.ZoomState?) {
+                    if (state != null) {
+                        camera.cameraControl.setZoomRatio(state.minZoomRatio)
+                        camera.cameraInfo.zoomState.removeObserver(this)
+                    }
+                }
+            }
+            camera.cameraInfo.zoomState.observe(owner, observer)
+        } else {
+            camera.cameraControl.setZoomRatio(1f)
+        }
     }
 
     private fun unbind() {
-        analysis?.clearAnalyzer()
-        analysis = null
-        provider?.unbindAll()
-        _frames.value = null
+        synchronized(lock) {
+            analysis?.clearAnalyzer()
+            val a = analysis
+            analysis = null
+            _frames.value = null
+            a?.let { provider?.unbind(it) }
+        }
     }
 
-    private fun analyze(image: ImageProxy) {
+    private fun analyze(a: ImageAnalysis, image: ImageProxy) {
         image.use {
             val now = clock()
             if (now - lastEmitAt < minIntervalMs) return
             lastEmitAt = now
-            val bitmap = it.toBitmap()
-            val out = ByteArrayOutputStream(48 * 1024)
-            bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
-            bitmap.recycle()
-            if (analysis != null) _frames.value = CameraFrame(out.toByteArray(), now, ++n)
+            var bitmap: Bitmap? = null
+            try {
+                bitmap = it.toBitmap()
+                val out = ByteArrayOutputStream(48 * 1024)
+                bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
+                synchronized(lock) {
+                    if (analysis === a) _frames.value = CameraFrame(out.toByteArray(), now, ++n)
+                }
+            } catch (e: Exception) {
+                if (!encodeErrorLogged) {
+                    Log.w(TAG, "Failed to encode frame", e)
+                    encodeErrorLogged = true
+                }
+            } finally {
+                bitmap?.recycle()
+            }
         }
     }
 
@@ -153,6 +201,7 @@ class MjpegCamera(
     }
 
     companion object {
+        private const val TAG = "MjpegCamera"
         const val JPEG_QUALITY = 60
         const val NORMAL_FPS = 15
         const val REDUCED_FPS = 8
