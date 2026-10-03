@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MecanumBot Pilot</title>
+  <link rel="stylesheet" href="pilot.css">
+</head>
+<body>
+  <header id="bar">
+    <span id="conn" class="pill">offline</span>
+    <span id="role" class="pill">—</span>
+    <span>RTT <b id="rtt">—</b></span>
+    <span>VM <b id="vm">—</b></span>
+    <span>Active <b id="active">—</b></span>
+    <span>Phone <b id="temp">—</b></span>
+    <span>Video <b id="video">—</b></span>
+    <span class="help">Shift = drive · WASD move · Q/E turn · Space = STOP</span>
+  </header>
+
+  <main id="view">
+    <img id="stream" alt="robot camera">
+    <div id="banners"></div>
+  </main>
+
+  <footer id="controls">
+    <div class="stick" id="left-stick" data-axes="xy"><div class="knob"></div><span>move</span></div>
+    <div class="middle">
+      <label class="limit">Speed limit <b id="limit-value">30 %</b>
+        <input id="limit" type="range" min="10" max="100" step="5" value="30" autocomplete="off">
+      </label>
+      <div class="buttons">
+        <button id="hold" class="drive-control">Hold to drive</button>
+        <button id="stop">STOP</button>
+      </div>
+    </div>
+    <div class="stick" id="right-stick" data-axes="x"><div class="knob"></div><span>turn</span></div>
+  </footer>
+
+  <script src="pilot.js"></script>
+</body>
+</html>
