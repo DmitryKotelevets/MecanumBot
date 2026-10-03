@@ -70,7 +70,9 @@ function onStatus(m) {
 
 function onTelemetry(m) {
   // A STOP from anywhere (another tab, the robot's own screen) needs a new press to drive again.
-  if (state.stops !== null && m.stops > state.stops) releaseDeadman();
+  // Any change counts: a new session on the phone starts again from 0.
+  if (state.stops !== null && m.stops !== state.stops) releaseDeadman();
+  if (m.phase !== 'READY') releaseDeadman();
   state.stops = m.stops;
   state.telemetry = m;
   checkVideo(m);
@@ -89,6 +91,10 @@ function pressDeadman() {
 function releaseDeadman() {
   const was = state.deadman;
   state.deadman = false;
+  // Nothing held survives a release: a key whose keyup got lost must not drive on the next press.
+  state.keys.clear();
+  state.stick.vx = 0; state.stick.vy = 0; state.stick.w = 0;
+  document.querySelectorAll('.stick .knob').forEach((k) => { k.style.transform = ''; });
   if (was && isDriver()) send({ t: 'drive', vx: 0, vy: 0, w: 0, en: false });
   render();
 }
@@ -128,6 +134,7 @@ const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE']);
 
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') { e.preventDefault(); stop(); return; }
+  if (e.metaKey || e.ctrlKey || e.altKey) return; // macOS swallows keyup under Cmd: the key would stick
   if (e.key === 'Shift') { if (!e.repeat) pressDeadman(); return; }
   if (MOVE_KEYS.has(e.code)) {
     e.preventDefault();
@@ -154,7 +161,7 @@ const hold = $('hold');
 hold.addEventListener('pointerdown', (e) => { hold.setPointerCapture(e.pointerId); pressDeadman(); });
 for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) hold.addEventListener(ev, releaseDeadman);
 
-$('stop').addEventListener('click', stop);
+$('stop').addEventListener('pointerdown', stop); // not click: that waits for the release
 
 const limit = $('limit');
 limit.value = DEFAULT_LIMIT; // browsers may restore the old value; the spec wants 30 % on every load
