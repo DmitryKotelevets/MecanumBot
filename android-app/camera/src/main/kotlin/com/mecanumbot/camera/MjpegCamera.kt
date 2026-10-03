@@ -1,0 +1,160 @@
+package com.mecanumbot.camera
+
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.util.Size
+import android.view.Surface
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageProxy
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.lifecycle.awaitInstance
+import androidx.lifecycle.LifecycleOwner
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import java.io.ByteArrayOutputStream
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+
+enum class Lens { ULTRA_WIDE, MAIN }
+
+/** One JPEG. [n] increases by one per frame; [capturedAt] uses the clock passed to [MjpegCamera]. */
+class CameraFrame(val bytes: ByteArray, val capturedAt: Long, val n: Long)
+
+/**
+ * CameraX → JPEG for the MJPEG stream (spec §5). The camera is bound to [owner] (the service) only
+ * while [setActive] is true and the level is not OFF, so nobody watching costs nothing. Setters
+ * must be called on the main thread; frames are encoded on a private thread.
+ */
+class MjpegCamera(
+    private val context: Context,
+    private val owner: LifecycleOwner,
+    private val scope: CoroutineScope,
+    private val clock: () -> Long,
+) {
+    private val _frames = MutableStateFlow<CameraFrame?>(null)
+    val frames: StateFlow<CameraFrame?> = _frames.asStateFlow()
+
+    private val executor: ExecutorService = Executors.newSingleThreadExecutor()
+    private var provider: ProcessCameraProvider? = null
+    private var loading = false
+    private var analysis: ImageAnalysis? = null
+
+    private var active = false
+    private var level = ThermalLevel.NORMAL
+    private var lens = Lens.ULTRA_WIDE
+    private var rotationDegrees = 0
+
+    @Volatile private var minIntervalMs = 1_000L / NORMAL_FPS
+    @Volatile private var lastEmitAt = Long.MIN_VALUE / 2
+    @Volatile private var n = 0L
+
+    fun setActive(active: Boolean) {
+        if (this.active == active) return
+        this.active = active
+        rebind()
+    }
+
+    fun setLevel(level: ThermalLevel) {
+        if (this.level == level) return
+        this.level = level
+        rebind()
+    }
+
+    /** [rotationDegrees] is 0, 90, 180 or 270: how the mount turns the picture. */
+    fun setOptions(lens: Lens, rotationDegrees: Int) {
+        if (this.lens == lens && this.rotationDegrees == rotationDegrees) return
+        this.lens = lens
+        this.rotationDegrees = rotationDegrees
+        rebind()
+    }
+
+    fun release() {
+        unbind()
+        executor.shutdown()
+    }
+
+    private fun rebind() {
+        val p = provider
+        if (p == null) {
+            if (!loading) {
+                loading = true
+                scope.launch {
+                    provider = ProcessCameraProvider.awaitInstance(context)
+                    rebind()
+                }
+            }
+            return
+        }
+        unbind()
+        if (!active || level == ThermalLevel.OFF) return
+        if (context.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) return
+
+        val reduced = level == ThermalLevel.REDUCED
+        val size = if (reduced) Size(320, 240) else Size(640, 480)
+        minIntervalMs = 1_000L / if (reduced) REDUCED_FPS else NORMAL_FPS
+        val a = ImageAnalysis.Builder()
+            .setResolutionSelector(
+                ResolutionSelector.Builder()
+                    .setResolutionStrategy(ResolutionStrategy(size, ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER))
+                    .build(),
+            )
+            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+            .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+            .setOutputImageRotationEnabled(true) // CameraX rotates the buffer, so the JPEG is upright
+            .setTargetRotation(surfaceRotation(rotationDegrees))
+            .build()
+        a.setAnalyzer(executor, ::analyze)
+        val camera = try {
+            p.bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, a)
+        } catch (_: IllegalStateException) {
+            return
+        } catch (_: IllegalArgumentException) {
+            return
+        }
+        analysis = a
+        // Pixels expose the ultra-wide through the back logical camera's zoom below 1×.
+        val ratio = if (lens == Lens.ULTRA_WIDE) camera.cameraInfo.zoomState.value?.minZoomRatio ?: 1f else 1f
+        camera.cameraControl.setZoomRatio(ratio)
+    }
+
+    private fun unbind() {
+        analysis?.clearAnalyzer()
+        analysis = null
+        provider?.unbindAll()
+        _frames.value = null
+    }
+
+    private fun analyze(image: ImageProxy) {
+        image.use {
+            val now = clock()
+            if (now - lastEmitAt < minIntervalMs) return
+            lastEmitAt = now
+            val bitmap = it.toBitmap()
+            val out = ByteArrayOutputStream(48 * 1024)
+            bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
+            bitmap.recycle()
+            if (analysis != null) _frames.value = CameraFrame(out.toByteArray(), now, ++n)
+        }
+    }
+
+    private fun surfaceRotation(degrees: Int): Int = when (degrees) {
+        90 -> Surface.ROTATION_90
+        180 -> Surface.ROTATION_180
+        270 -> Surface.ROTATION_270
+        else -> Surface.ROTATION_0
+    }
+
+    companion object {
+        const val JPEG_QUALITY = 60
+        const val NORMAL_FPS = 15
+        const val REDUCED_FPS = 8
+    }
+}
