@@ -105,13 +105,19 @@ function stop() {
   render();
 }
 
+// Each direction has a letter key and an arrow key; holding both still counts once.
 function axis(plus, minus) {
-  return (state.keys.has(plus) ? 1 : 0) - (state.keys.has(minus) ? 1 : 0);
+  const held = (codes) => (codes.some((c) => state.keys.has(c)) ? 1 : 0);
+  return held(plus) - held(minus);
 }
 
 function command() {
   const raw = state.lastInput === 'keys'
-    ? { vx: axis('KeyD', 'KeyA'), vy: axis('KeyW', 'KeyS'), w: axis('KeyE', 'KeyQ') }
+    ? {
+        vx: axis(['KeyD'], ['KeyA']),
+        vy: axis(['KeyW', 'ArrowUp'], ['KeyS', 'ArrowDown']),
+        w: axis(['KeyE', 'ArrowRight'], ['KeyQ', 'ArrowLeft']), // right = clockwise
+      }
     : state.stick;
   const k = state.limit;
   return { vx: raw.vx * k, vy: raw.vy * k, w: raw.w * k };
@@ -130,7 +136,10 @@ const round = (v) => Math.round(v * 1000) / 1000;
 
 // ---------- Keyboard ----------
 
-const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE']);
+const MOVE_KEYS = new Set([
+  'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE',
+  'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+]);
 
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') { e.preventDefault(); stop(); return; }

@@ -11,9 +11,9 @@ The first tab to connect drives; other tabs watch, and anyone can STOP.
 | Input | Action |
 |---|---|
 | Shift (hold) or "Hold to drive" | deadman: drive frames are sent only while it is held |
-| W / S | forward / back |
+| W / S or ↑ / ↓ | forward / back |
 | A / D | left / right (strafe) |
-| Q / E | turn counter-clockwise / clockwise |
+| Q / E or ← / → | turn counter-clockwise / clockwise |
 | Space or STOP | STOP ×3 on the robot |
 | Left / right stick (mouse or touch) | move / turn |
 | Speed limit | scales every axis; 30 % on every page load |
