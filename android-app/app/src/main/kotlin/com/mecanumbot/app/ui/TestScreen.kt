@@ -49,11 +49,12 @@ private const val DEFAULT_LIMIT = 0.3f
 fun TestScreen(session: RobotSession, state: SessionState, inForeground: StateFlow<Boolean>, raw: Boolean) {
     val foreground by inForeground.collectAsStateWithLifecycle()
     val enabled = foreground && state.phase == Phase.READY
-    DisposableEffect(session) { onDispose { session.stop() } } // leaving the Test screen
+    // Leaving the Test screen stops TEST/RAW driving but not a remote pilot (stage 5 spec §4.3).
+    DisposableEffect(session) { onDispose { session.releaseLocal() } }
 
     Row(Modifier.fillMaxSize().padding(8.dp)) {
         Column(Modifier.weight(2f)) {
-            // Switching Drive <-> Raw disposes the other tab, and each tab stops the robot on dispose.
+            // Switching Drive <-> Raw disposes the other tab, and each tab releases its source on dispose.
             if (raw) RawTab(session, enabled, state.stops, inForeground)
             else DriveTab(session, enabled, state.stops, inForeground)
         }
@@ -68,7 +69,7 @@ private fun DriveTab(session: RobotSession, enabled: Boolean, stops: Int, inFore
     var right by remember { mutableStateOf(Offset.Zero) }
     var holding by remember { mutableStateOf(false) }
 
-    DisposableEffect(session) { onDispose { session.stop() } }
+    DisposableEffect(session) { onDispose { session.releaseLocal() } }
     // STOP (from anywhere) or losing READY/foreground drops the hold: motion needs a new press.
     LaunchedEffect(enabled, stops) { holding = false }
     LaunchedEffect(holding, enabled) {
@@ -109,7 +110,7 @@ private fun DriveTab(session: RobotSession, enabled: Boolean, stops: Int, inFore
 private fun RawTab(session: RobotSession, enabled: Boolean, stops: Int, inForeground: StateFlow<Boolean>) {
     val values = remember { mutableStateListOf(0, 0, 0, 0) }
 
-    DisposableEffect(session) { onDispose { session.stop() } } // leaving the Raw tab
+    DisposableEffect(session) { onDispose { session.releaseLocal() } } // leaving the Raw tab
     LaunchedEffect(enabled, stops) {
         // STOP, background or a lost session zero the sliders: motion needs a new slider move.
         for (i in 0 until 4) values[i] = 0

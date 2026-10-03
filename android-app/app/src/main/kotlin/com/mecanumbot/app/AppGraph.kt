@@ -10,8 +10,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -34,6 +37,14 @@ class AppGraph(context: Context) {
     private val _active = MutableStateFlow<Active?>(null)
     val active: StateFlow<Active?> = _active.asStateFlow()
 
+    /** The current session, for the pilot server (it follows USB ↔ Fake switches). */
+    val sessions: StateFlow<RobotSession?> = _active.map { it?.session }.stateIn(scope, SharingStarted.Eagerly, null)
+
+    val cameraPreference = CameraPreference(context)
+
+    /** Written by RobotService; shown on the status bar. */
+    val pilot = MutableStateFlow(PilotInfo())
+
     private val _inForeground = MutableStateFlow(false)
     val inForeground: StateFlow<Boolean> = _inForeground.asStateFlow()
 
@@ -51,10 +62,13 @@ class AppGraph(context: Context) {
         }
     }
 
-    /** Activity onResume / onPause. Leaving the foreground always stops the robot (STOP ×3). */
+    /**
+     * Activity onResume / onPause. Leaving the foreground stops TEST/RAW driving (STOP ×3) but lets
+     * a remote pilot keep driving with the screen off (stage 5 spec §4.3).
+     */
     fun onForeground(visible: Boolean) {
         _inForeground.value = visible
-        if (!visible) _active.value?.session?.stop()
+        if (!visible) _active.value?.session?.releaseLocal()
     }
 
     private suspend fun activate(kind: LinkKind) {

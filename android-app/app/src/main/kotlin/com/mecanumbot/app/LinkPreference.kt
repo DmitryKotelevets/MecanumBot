@@ -8,7 +8,8 @@ import kotlinx.coroutines.flow.first
 
 enum class LinkKind { USB, FAKE }
 
-private val Context.settings by preferencesDataStore(name = "settings")
+/** The app's one DataStore; a second delegate for the same file would crash at runtime. */
+internal val Context.settings by preferencesDataStore(name = "settings")
 
 /** The USB / Fake choice (spec §9). Default USB; no automatic fallback. */
 class LinkPreference(context: Context) {
