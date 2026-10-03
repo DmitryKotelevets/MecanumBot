@@ -16,4 +16,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "mecanumbot"
-include(":core", ":fake", ":usb", ":app")
+include(":core", ":fake", ":usb", ":server", ":app")
