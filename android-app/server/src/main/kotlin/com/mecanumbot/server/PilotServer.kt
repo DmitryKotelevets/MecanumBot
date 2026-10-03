@@ -39,6 +39,7 @@ import kotlin.time.Duration.Companion.seconds
 /**
  * The pilot's HTTP server (spec §6): Ktor CIO on 0.0.0.0:[port]. [assets] maps a file name under
  * assets/pilot/ to its bytes (null = missing). Every PilotHub call is made on [hubDispatcher].
+ * Single use: once stopped it never starts again. start/stop may be called from any thread.
  */
 class PilotServer(
     private val hub: PilotHub,
@@ -48,15 +49,19 @@ class PilotServer(
     private val port: Int = PORT,
 ) {
     private var engine: EmbeddedServer<*, *>? = null
+    private var stopped = false
 
+    @Synchronized
     fun start() {
-        if (engine != null) return
+        if (stopped || engine != null) return
         engine = embeddedServer(CIO, port = port, host = "0.0.0.0") {
             pilotModule(hub, video, assets, hubDispatcher)
         }.start(wait = false)
     }
 
+    @Synchronized
     fun stop() {
+        stopped = true
         engine?.stop(gracePeriodMillis = 200, timeoutMillis = 1_000)
         engine = null
     }

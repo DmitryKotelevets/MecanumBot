@@ -29,6 +29,7 @@ import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.net.ServerSocket
@@ -189,5 +190,15 @@ class PilotServerTest {
             """{"app":"0.1","fw":"0.1","link":"Connected","phase":"READY","driver_connected":false,"watchers":0,"video":"normal","ignored":0}""",
             body,
         )
+    }
+
+    @Test
+    fun `stop before start leaves the server unbound`() {
+        val port = ServerSocket(0).use { it.localPort }
+        val hub = PilotHub(MutableStateFlow(null), video, clock, "0.1")
+        val server = PilotServer(hub, video, files::get, main, port)
+        server.stop()
+        server.start()
+        assertThrows(java.net.ConnectException::class.java) { Socket("127.0.0.1", port).close() }
     }
 }

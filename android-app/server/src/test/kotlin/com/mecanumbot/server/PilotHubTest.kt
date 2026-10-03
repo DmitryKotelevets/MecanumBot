@@ -226,4 +226,30 @@ class PilotHubTest {
         assertEquals(2, a.statuses().size)
         assertTrue(a.statuses().last().contains(""""mode":"LOCAL_ONLY""""))
     }
+
+    @Test
+    fun `after close the driver's drive is ignored`() = runTest {
+        val (s, _) = readySession()
+        val hub = hub(s)
+        val a = Client().also(hub::connect)
+        hub.onText(a, drive(0.5f))
+        advanceTimeBy(30); runCurrent()
+        assertEquals(Source.REMOTE, s.state.value.activeSource)
+        hub.close()
+        s.stop()
+        hub.onText(a, drive(0.5f))
+        advanceTimeBy(30); runCurrent()
+        assertNull(s.state.value.activeSource)
+    }
+
+    @Test
+    fun `after close connect gets no status and tick sends nothing`() = runTest {
+        val (s, _) = readySession()
+        val hub = hub(s)
+        hub.close()
+        val a = Client().also(hub::connect)
+        hub.tick()
+        assertTrue(a.texts.isEmpty())
+        assertEquals(PilotHub.Summary(false, 0, 0), hub.summary.value)
+    }
 }

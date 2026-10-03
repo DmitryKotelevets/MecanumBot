@@ -12,6 +12,8 @@ import android.content.pm.ServiceInfo
 import android.net.wifi.WifiManager
 import android.os.BatteryManager
 import android.os.PowerManager
+import android.util.Log
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.mecanumbot.camera.MjpegCamera
@@ -35,6 +37,7 @@ class RobotService : LifecycleService() {
     private var started = false
     private var cameraAllowed = false
     private var server: PilotServer? = null
+    private var hub: PilotHub? = null
     private var camera: MjpegCamera? = null
     private lateinit var wifi: WifiAddress
     private lateinit var wakeLock: PowerManager.WakeLock
@@ -57,6 +60,7 @@ class RobotService : LifecycleService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
         if (intent?.action == ACTION_STOP) {
+            hub?.close() // fence off pilots first, or a held deadman re-drives after STOP ×3
             graph.active.value?.session?.stop()
             stopSelf()
             return START_NOT_STICKY
@@ -79,6 +83,7 @@ class RobotService : LifecycleService() {
         camera = cam
         val video = CameraVideo(cam, lifecycleScope)
         val hub = PilotHub(graph.sessions, video, graph.clock, "${AppGraph.APP_MAJOR}.${AppGraph.APP_MINOR}")
+        this.hub = hub
         val s = PilotServer(hub, video, ::asset, Dispatchers.Main.immediate)
         server = s
         lifecycleScope.launch(Dispatchers.IO) {
@@ -88,7 +93,7 @@ class RobotService : LifecycleService() {
             } catch (e: IOException) { // port 8080 busy, no network …
                 "server: ${e.message}"
             }
-            graph.pilot.update { it.copy(error = error) } // update{}: the Main collector below writes too
+            if (lifecycle.currentState != Lifecycle.State.DESTROYED) graph.pilot.update { it.copy(error = error) } // update{}: the Main collector below writes too
         }
         if (cam != null) {
             lifecycleScope.launch { graph.cameraPreference.options.collect { cam.setOptions(it.lens, it.rotation) } }
@@ -118,6 +123,8 @@ class RobotService : LifecycleService() {
     }
 
     override fun onDestroy() {
+        hub?.close()
+        hub = null
         server?.let { s -> Thread { s.stop() }.start() } // stop() blocks up to 1 s
         server = null
         camera?.release()
@@ -140,8 +147,10 @@ class RobotService : LifecycleService() {
             try {
                 startForeground(NOTIFICATION_ID, n, device or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA)
                 return true
-            } catch (_: SecurityException) { // CAMERA revoked
-            } catch (_: IllegalStateException) { // ForegroundServiceStartNotAllowedException: app not visible
+            } catch (e: SecurityException) { // CAMERA revoked
+                Log.w(TAG, "camera service type refused, video off", e)
+            } catch (e: IllegalStateException) { // ForegroundServiceStartNotAllowedException: app not visible
+                Log.w(TAG, "camera service type refused, video off", e)
             }
         }
         startForeground(NOTIFICATION_ID, n, device)
@@ -182,6 +191,7 @@ class RobotService : LifecycleService() {
 
     companion object {
         const val ACTION_STOP = "com.mecanumbot.action.STOP_PILOT"
+        private const val TAG = "RobotService"
         private const val CHANNEL = "pilot"
         private const val NOTIFICATION_ID = 1
         private const val TEMP_PERIOD_MS = 5_000L

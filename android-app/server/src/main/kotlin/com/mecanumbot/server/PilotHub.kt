@@ -30,13 +30,27 @@ class PilotHub(
     private val connections = mutableListOf<Connection>() // arrival order; the first one drives
     private val lastStatus = HashMap<Connection, StatusMsg>()
     private var ignored = 0
+    private var closed = false
 
     private val _summary = MutableStateFlow(Summary(false, 0, 0))
     val summary: StateFlow<Summary> = _summary.asStateFlow()
 
     private val driver: Connection? get() = connections.firstOrNull()
 
+    /**
+     * Service stopping: from now on no pilot can drive. Call before RobotSession.stop() so a held
+     * deadman can't re-drive after STOP ×3.
+     */
+    fun close() {
+        closed = true
+        sessions.value?.update(Command(0f, 0f, 0f, false, Source.REMOTE))
+        connections.clear()
+        lastStatus.clear()
+        _summary.value = Summary(false, 0, ignored)
+    }
+
     fun connect(c: Connection) {
+        if (closed) return
         connections += c
         refresh()
     }
@@ -51,6 +65,7 @@ class PilotHub(
     }
 
     fun onText(c: Connection, text: String) {
+        if (closed) return
         if (c !in connections) return
         when (val m = PilotMessages.decode(text)) {
             null -> {
@@ -67,6 +82,7 @@ class PilotHub(
 
     /** 10 Hz from the server: status to whoever's changed, then telemetry to everyone. */
     fun tick() {
+        if (closed) return
         refresh()
         val t = PilotMessages.encode(telemetry())
         connections.forEach { it.send(t) }
